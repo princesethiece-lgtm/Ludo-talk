@@ -6,7 +6,8 @@ Ludo game for iPhone by Audio Nation. Play against the computer or with 2–4 fr
 
 | Path | What it is |
 |---|---|
-| `web/index.html` | The whole game: board, tokens, dice, rules, computer players, sounds |
+| `web/index.html` | The whole game: 3D board, tokens, dice, rules, computer players, sounds |
+| `web/three.min.js` | three.js 0.149 (MIT licence, see `three-LICENSE.txt`), draws the 3D scene |
 | `App/AppDelegate.swift` | iPhone app shell that shows the game full screen and adds real vibration |
 | `App/Assets.xcassets` | App icon and launch colour |
 | `project.yml` | Xcode project description (XcodeGen) |
