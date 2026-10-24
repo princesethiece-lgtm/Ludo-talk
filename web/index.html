@@ -1698,7 +1698,7 @@ function dholDance(col){
   var dur=2700;
   tween(dur,function(t){
     var ph=t*dur/1000,beat=Math.abs(Math.sin(ph*Math.PI*3.2)),sc=Math.min(1,t*8)*Math.min(1,(1-t)*8);
-    showA(A,7.5,7.5,Math.sin(ph*5)*.5+.35,beat*.28);A.scale.setScalar(Math.max(.01,1.3*sc));
+    showA(A,7.5,7.5,Math.sin(ph*5)*.5+.35,beat*.28);A.scale.setScalar(Math.max(.01,2.1*sc));
     u.body.rotation.z=Math.sin(ph*Math.PI*3.2)*.08;u.head.rotation.z=Math.sin(ph*Math.PI*6.4)*.14;u.head.rotation.x=Math.sin(ph*Math.PI*3.2)*.12;
     u.arms[0].rotation.z=.5+Math.sin(ph*Math.PI*6.4)*.9;u.arms[1].rotation.z=.5+Math.sin(ph*Math.PI*6.4+Math.PI)*.9;
     u.legs[0].rotation.z=Math.sin(ph*Math.PI*3.2)*.5;u.legs[1].rotation.z=-Math.sin(ph*Math.PI*3.2)*.5;
