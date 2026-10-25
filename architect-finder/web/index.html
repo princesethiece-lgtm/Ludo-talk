@@ -952,10 +952,12 @@ function setRadius(k,final){
   var sl=$("r-sl");if(sl&&final!=="slider")sl.value=kmToPos(S.radius);
   if(final)save();
 }
+var lastTick=0;
+function slideTick(){var n=Date.now();if(n-lastTick<28)return;lastTick=n;tick();}   // a light tap for every 0.1 km while sliding
 function wireRadius(){
   var sl=$("r-sl");if(!sl)return;
-  sl.addEventListener("input",function(){setRadius(posToKm(+sl.value),false);});
-  sl.addEventListener("change",function(){setRadius(posToKm(+sl.value),"slider");tick();});
+  sl.addEventListener("input",function(){var was=S.radius;setRadius(posToKm(+sl.value),false);if(S.radius!==was)slideTick();});
+  sl.addEventListener("change",function(){setRadius(posToKm(+sl.value),"slider");});
 }
 S.radius=clampR(+S.radius||5);
 /* ---------- UI wiring ---------- */
