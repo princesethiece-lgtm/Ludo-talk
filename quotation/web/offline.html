@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<style>
+:root{--bg:#0f141a;--panel:#161d26;--panel2:#1c2531;--line:#263241;--ink:#e8edf3;--ink2:#9fb0c3;--acc:#f0a830}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,system-ui,sans-serif;padding:calc(env(safe-area-inset-top) + 28px) 20px 30px}
+.logo{width:72px;height:72px;border-radius:18px;margin:10px auto 14px;border:3px solid var(--acc);
+ background:radial-gradient(circle,var(--acc) 0 12%,transparent 13% 28%,rgba(240,168,48,.55) 29% 35%,transparent 36% 52%,rgba(240,168,48,.3) 53% 58%,transparent 59%)}
+h1{text-align:center;font-size:21px;margin:0 0 4px}
+p.sub{text-align:center;color:var(--ink2);margin:0 0 22px}
+.msg{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:18px;color:var(--ink2)}
+label{display:block;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);margin:14px 0 5px}
+textarea,input{width:100%;font:inherit;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 12px}
+button{width:100%;margin-top:18px;font:inherit;font-weight:700;padding:14px;border-radius:12px;border:0;background:var(--acc);color:#1a1200}
+small{color:var(--ink2);display:block;margin-top:5px;font-size:12px}
+.spin{width:28px;height:28px;margin:6px auto;border:3px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:s 1s linear infinite}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="logo"></div>
+<h1>AN Quotation</h1>
+<p class="sub">Audio Nation · Quotation (NAS se)</p>
+<div class="msg" id="msg"><div class="spin"></div></div>
+<label>NAS address</label>
+<textarea id="servers" rows="3"></textarea>
+<small>Har line mein ek address. Jo pehle chale, wahi use hota hai. Bahar ke liye: quotation.audionation.synology.me · office Wi-Fi: http://192.168.1.20:8858</small>
+<label>API key</label>
+<input id="key" autocapitalize="off" autocorrect="off">
+<button id="go">Dobara jodiye</button>
+<script>
+const post=m=>window.webkit&&window.webkit.messageHandlers.native.postMessage(m);
+window.__init=(servers,key,msg)=>{document.getElementById('servers').value=servers.join('\n');document.getElementById('key').value=key;
+  document.getElementById('msg').innerHTML=msg.indexOf('jud raha')>=0?'<div class="spin"></div><div style="text-align:center">'+msg+'</div>':msg;};
+document.getElementById('go').onclick=()=>{post({t:'haptic'});document.getElementById('msg').innerHTML='<div class="spin"></div>';
+  post({t:'settings',servers:document.getElementById('servers').value.split('\n'),key:document.getElementById('key').value.trim(),reconnect:true});};
+</script>
+</body>
+</html>
