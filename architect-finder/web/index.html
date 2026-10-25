@@ -90,6 +90,12 @@ ol.steps li{margin:5px 0}
 .sug button:last-child{border-bottom:0}
 .sug button small{font:500 12px/1.2 -apple-system,sans-serif;color:var(--muted);text-align:right}
 .sug .dym{padding:9px 14px 3px;font:700 11px/1 -apple-system,sans-serif;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent2)}
+.nsearch{margin-bottom:0}
+.nsearch input{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%236E6A5E' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='12' cy='8' r='4'/%3E%3Cpath d='M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6'/%3E%3C/svg%3E")}
+.rad{display:flex;align-items:center;gap:10px;width:100%;padding:4px 2px}
+.rad input[type=range]{flex:1;min-width:0;height:34px;accent-color:var(--accent);margin:0}
+.rbtn{flex:0 0 auto;width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:700 20px/1 -apple-system,sans-serif}
+.rad output{flex:0 0 auto;min-width:64px;text-align:right;font:700 17px/1 -apple-system,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)}
 .whole{font-size:14px;color:var(--ink2);padding:6px 2px 2px;line-height:1.35}
 .cityrow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}
 .usage{height:8px;border-radius:6px;background:var(--chip);overflow:hidden;margin:6px 0}
@@ -112,10 +118,13 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
     <div class="scroll" id="cities"></div>
     <div class="sep"></div>
     <div class="lab" id="r-lab">Radius</div>
-    <div class="scroll" id="radius"></div>
+    <div id="radius"></div>
     <div class="sep"></div>
     <div class="lab">Looking for</div>
     <div class="row" id="cats"></div>
+    <div class="sep"></div>
+    <div class="lab">Architect's name <span style="text-transform:none;letter-spacing:0;font-weight:500">— optional, when you know the name but not the firm</span></div>
+    <div class="wsearch nsearch"><input type="search" id="n-in" placeholder="e.g. Balwinder" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="search"></div>
     <button class="go" id="go">Search</button>
   </section>
 
@@ -190,7 +199,12 @@ var BUILTIN=[
   {id:"ludhiana",name:"Ludhiana",lat:30.9010,lng:75.8573},
   {id:"jalandhar",name:"Jalandhar",lat:31.3260,lng:75.5762}
 ];
-var RADII=[1,2,3,4,5,8,9,10,12,15,25];
+var RMIN=0.5,RMAX=30;
+function r1(x){return Math.round(x*10)/10;}
+function clampR(x){return Math.max(RMIN,Math.min(RMAX,r1(x)));}
+function kmToPos(k){return Math.round(1000*Math.log(clampR(k)/RMIN)/Math.log(RMAX/RMIN));}
+function posToKm(p){return clampR(RMIN*Math.pow(RMAX/RMIN,p/1000));}
+function fmtKm(k){return r1(k).toFixed(1).replace(/\.0$/,"")+" km";}
 var CATS=[
   {id:"arch",label:"Architects",q:"architect",tag:"Architect"},
   {id:"cons",label:"Lighting consultants",q:"lighting consultant",tag:"Lighting consultant"},
@@ -303,7 +317,7 @@ function serpZoom(lat,r){var z=Math.round(Math.log(156543*Math.cos(lat*Math.PI/1
 function serpNorm(p,cat){
   var g=p.gps_coordinates;if(!g)return null;
   var ph=p.phone||"";
-  return {id:p.place_id||p.data_id||p.title,name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:p.rating||0,votes:p.reviews||0,phone:ph,tel:ph,
+  return {id:p.place_id||p.data_id||p.title,typ:(p.types||[]).concat(p.type?[p.type]:[]).join(" "),name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:p.rating||0,votes:p.reviews||0,phone:ph,tel:ph,
     maps:p.place_id?("https://www.google.com/maps/place/?q=place_id:"+p.place_id):("https://www.google.com/maps/search/?api=1&query="+g.latitude+","+g.longitude),web:p.website||"",cats:[cat]};
 }
 function fetchSerp(cat,center,radius,token,nas,opt){
@@ -404,6 +418,7 @@ function fetchCat(cat,center,radius,token,opt){
 }
 function search(more){
   if(R.busy)return;
+  if(!more&&nameVal())return searchByName();
   if(!curKey()){openSettings();if(SRC==="an")anMsg("Enter the NAS address or press Find NAS.",true);return;}
   var cats=wanted();if(!cats.length){note("Choose at least one thing to look for.",true);return;}
   var area=cityById(S.city),region=isRegion(area),radius=S.radius;
@@ -412,7 +427,7 @@ function search(more){
   var calls=more?cats.filter(function(c){return R.tokens[c.id];}).length:cats.length*(plan?plan.length:1);
   if(usage().n+calls>limit()){note("You have used "+usage().n+" of the free searches this month. The app is paused until next month so you are never charged.",true);return;}
   R.busy=true;$("go").disabled=true;$("go").textContent="Searching…";note("");
-  if(!more){R.items=[];R.tokens={};R.shown=PAGE;R.autoStop=false;skeleton();}
+  if(!more){R.items=[];R.tokens={};R.shown=PAGE;R.autoStop=false;R.nameQ=null;skeleton();}
   R.loadingMore=!!more;if(more)paintMore();
   var cp=area.cur?whereAmI():Promise.resolve({lat:area.lat,lng:area.lng});
   cp.then(function(center){
@@ -449,7 +464,7 @@ function search(more){
     if(more)R.autoStop=true;
     if(!more)R.items=[];render();
     note((e&&e.niceMsg)||(e&&e.message)||"Could not search. Check your internet connection.",true);
-  }).then(function(){R.busy=false;R.loadingMore=false;$("go").disabled=false;$("go").textContent="Search";paintMore();setTimeout(nearEnd,60);});
+  }).then(function(){R.busy=false;R.loadingMore=false;$("go").disabled=false;goLabel();paintMore();setTimeout(nearEnd,60);});
 }
 function note(t,err){$("notice").innerHTML=t?'<div class="note'+(err?' err':'')+'">'+esc(t)+'</div>':"";}
 function skeleton(){$("meta").hidden=true;$("more").innerHTML="";$("list").innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';}
@@ -566,7 +581,7 @@ function render(){
   var a=sorted(),m=$("meta");
   m.hidden=!a.length;
   var city=cityById(S.city);
-  $("count").textContent=a.length+(R.area?" found in "+R.area.name:" found within "+S.radius+" km")+(R.fromCache?" · saved results":"");
+  $("count").textContent=R.nameQ?(a.length+" firm"+(a.length===1?"":"s")+" for “"+R.nameQ+"” in "+(R.area?R.area.name:R.place||"this area")):(a.length+(R.area?" found in "+R.area.name:" found within "+fmtKm(S.radius))+(R.fromCache?" · saved results":""));
   $("sort").innerHTML=SORTS.filter(function(s){return !(R.area&&s.id==="near");}).map(function(s){return '<button data-s="'+s.id+'" class="'+(S.sort===s.id?"on":"")+'">'+s.label+'</button>';}).join("");
   var shown=a.slice(0,R.shown||PAGE);
   $("list").innerHTML=a.length?shown.map(function(p,i){
@@ -576,7 +591,7 @@ function render(){
       '<div class="rank'+(i<3&&S.sort==="best"&&hasR?" top":"")+'">'+(i+1)+'</div>'+
       '<h3 class="serif">'+esc(p.name)+'<span class="ownwrap">'+ownHtml(p)+'</span> <a class="pen" data-edit="'+i+'" href="#" aria-label="Edit name">✎</a></h3>'+
       (hasR?'<div class="rate"><b>'+p.rating.toFixed(1)+'</b><span class="stars">★★★★★<i style="width:'+pct+'%">★★★★★</i></span><span>'+p.votes.toLocaleString("en-IN")+' reviews</span></div>':'<div class="rate"><span>No reviews yet</span></div>')+
-      '<div class="tags">'+p.cats.map(function(c){return '<span class="tag">'+esc(c)+'</span>';}).join("")+(R.area?(p.where?'<span class="tag dist">'+esc(p.where)+'</span>':''):'<span class="tag dist">'+fmtDist(p.dist)+' away</span>')+'</div>'+
+      '<div class="tags">'+(p.match?'<span class="tag" style="background:#E9A82033">'+esc(p.match)+'</span>':'')+p.cats.map(function(c){return '<span class="tag">'+esc(c)+'</span>';}).join("")+(R.area?(p.where?'<span class="tag dist">'+esc(p.where)+'</span>':''):'<span class="tag dist">'+fmtDist(p.dist)+' away</span>')+'</div>'+
       (p.addr?'<div class="addr">'+esc(p.addr)+'</div>':'')+
       '<div class="acts">'+
         (p.tel?'<a class="act call" data-tel="'+esc(p.tel)+'" href="#">'+ICON.call+esc(p.phone||"Call")+'</a>':'')+
@@ -755,6 +770,7 @@ function showSug(){
     if(SUG.length&&SUG[0].s<0.9)h='<div class="dym">Did you mean…</div>';
   }
   h+=SUG.map(function(o,i){return '<button data-sug="'+i+'"><span>'+esc(placeLabel(o.p))+'</span><small>'+esc(o.p.id.indexOf("g:")===0?placeSub(o.p):"Place you added")+'</small></button>';}).join("");
+  if(t.length>=3&&/[a-z]/i.test(t)&&(!SUG.length||SUG[0].s<0.8))h+='<button data-sugname="1"><span>👤 Architect named “'+esc(t)+'”</span><small>in '+esc(cityById(S.city).name)+'</small></button>';
   if(t.length>=3&&(!SUG.length||SUG[0].s<0.97))h+='<button data-sugmap="1"><span>🔎 Find “'+esc(t)+'” on the map</span><small>any town or area</small></button>';
   $("w-sug").innerHTML=h;$("w-sug").hidden=!h;
 }
@@ -808,12 +824,147 @@ function runJobs(jobs,max,fn,prog){   // a few at a time; a failed city does not
   });
 }
 
+/* ---------- search by the architect's name (firm name unknown) ---------- */
+function nameVal(){return ($("n-in").value||"").trim();}
+function goLabel(){var n=nameVal();$("go").textContent=n?"Find “"+(n.length>22?n.slice(0,21)+"…":n)+"”":"Search";}
+function nameTokens(nm){return pnorm(nm).split(" ").filter(function(w){return /[a-z]/.test(w);}).map(phon).filter(function(w){return w.length>=2;});}
+function nameHit(toks,text){   // every typed word is in the text (spelling-tolerant: balwinder = balvinder)
+  if(!toks.length)return false;
+  var words=pnorm(text).split(" ").map(phon).filter(Boolean);
+  return toks.every(function(q){return words.some(function(w){return w===q||(q.length>=3&&w.indexOf(q)===0)||(q.length>=4&&w.length>=4&&sim(q,w)>=0.84);});});
+}
+var FIRMW=/\b(architects?|architecture|associates|designs?|studio|consultants?|consultancy|interiors?|planners?|atelier|workshop|lighting|lights)\b/i;
+var JUNKW=/(\.com|\.in\b|\.org|www\.|associations?|council|institute|college|university|society|chapter|federation|justdial|linkedin|instagram|facebook|youtube|sulekha|indiamart|houzz|tradeindia|\btop \d+|\bbest\b|near me|list of|directory|records|company profile|reviews?|jobs?|careers?|elections?|news)/i;
+var FIRMSTOP=/^(architects?|architecture|associates?|and|the|design|designs|studio|consultants?|consultancy|interiors?|planners?|atelier|workshop|lighting|lights|pvt|ltd|llp|co|in|of|by)$/;
+function firmPhrases(r){
+  var out=[],t=String(r.title||"").replace(/\s+/g," ");
+  t.split(/\s[|–—:•·-]\s|\s@\s|,\s|\s\|\s?/).forEach(function(seg){seg=seg.trim();if(seg.length>=4&&seg.length<=60&&FIRMW.test(seg)&&!JUNKW.test(seg))out.push(seg);});
+  var sn=String(r.snippet||""),re=/(?:\bat|\bof|founder of|principal(?: architect)? (?:at|of)|partner (?:at|in)|director (?:at|of))\s+([A-Z][A-Za-z&.'’ ]{2,48}?(?:Architects?|Associates|Designs?|Studio|Consultants|Interiors|Atelier|Planners))/g,m;
+  while((m=re.exec(sn)))out.push(m[1].trim());
+  return out;
+}
+var GENERICW=/^(residential|commercial|industrial|home|homes|house|best|top|leading|famous|professional|modern|luxury|affordable|services?|company|firm|local|near|designers?|decorators?|contractors?|engineers?|builders?|ludhiana|jalandhar|amritsar|patiala|bathinda|mohali|chandigarh|punjab|haryana|delhi|india|city)$/;
+var GOODTYPE=/architect|design|interior|consult|light|planner|studio|engineer|construct|builder|contractor|landscap|vastu|decor/i;
+var BADTYPE=/account|chartered|\btax|legal|lawyer|advocate|insurance|fashion|boutique|cloth|apparel|garment|salon|beauty|jewel|tailor|bridal|wedding|photograph|restaurant|hotel|school|hospital|clinic|doctor|software|it company/i;
+function firmWords(phrase){return pnorm(phrase).split(" ").filter(function(w){return w.length>=3&&!FIRMSTOP.test(w)&&!GENERICW.test(w);}).map(phon);}
+function firmLike(phrase,title){var a=firmWords(phrase);return a.length>0&&nameHit(a,title);}
+function fullNameIn(toks,text){   // "Balwinder" → "Balwinder Deo" as written on the page
+  var w=String(text||"").replace(/[^A-Za-z.\s]/g," ").split(/\s+/).filter(Boolean);
+  for(var i=0;i<w.length;i++){
+    var p=phon(w[i].toLowerCase());
+    if(p===toks[0]||(toks[0].length>=3&&p.indexOf(toks[0])===0)){
+      var out=[w[i]];
+      for(var k=i+1;k<w.length&&out.length<3;k++){if(/^[A-Z][a-z]+$/.test(w[k])&&!FIRMSTOP.test(w[k].toLowerCase())&&!NSTOP.test(w[k]))out.push(w[k]);else break;}
+      return out.map(function(x){return x.charAt(0).toUpperCase()+x.slice(1).toLowerCase();}).join(" ");
+    }
+  }
+  return "";
+}
+function hostOf(u){try{return new URL(u).hostname.replace(/^www\./,"");}catch(e){return "";}}
+function knownOwners(toks,center,maxKm){   // firms seen before whose architect's name is already known
+  var cache=ld("anf-cache",{}),seen={},out=[];
+  Object.keys(cache).forEach(function(k){(cache[k].items||[]).forEach(function(x){
+    if(!x||seen[x.id])return;var n=NAMES[x.id]||{},own=n.m||n.a||"";
+    if(own&&nameHit(toks,own)&&hav(center.lat,center.lng,x.lat,x.lng)<=maxKm){seen[x.id]=1;var c=JSON.parse(JSON.stringify(x));c.match="Architect: "+own;out.push(c);}
+  });});
+  return out;
+}
+function webLookup(nm,toks,cats,area,center,maxKm){   // web pages that name the architect → their firm → the firm on the map
+  if(!anBase())return Promise.resolve();
+  return anReach().then(function(ok){
+    if(!ok)return;
+    var place=area.cur?nearestCityName(center):area.name;
+    var word=cats.length===1?cats[0].q:"architect";
+    return getJson(anBase()+"/search.json?engine=google&num=20&inline_images=0&gl=in&hl=en&q="+encodeURIComponent(nm+" "+word+(place?" "+place:""))+"&api_key="+encodeURIComponent(anKey())).then(function(r){
+      var res=(r.json&&r.json.organic_results)||[],phr=[],seenP={},who={};
+      res.forEach(function(o){
+        var txt=(o.title||"")+" "+(o.snippet||"");
+        if(!nameHit(toks,txt))return;
+        firmPhrases(o).forEach(function(f){var k=phon(pnorm(f));if(!firmWords(f).length)return;if(!seenP[k]&&phr.length<3){seenP[k]=1;phr.push(f);who[f]={name:fullNameIn(toks,txt)||nm,host:hostOf(o.link)};}});
+      });
+      return runJobs(phr,2,function(f){
+        return getJson(anBase()+"/search.json?engine=google_maps&type=search&q="+encodeURIComponent(f+(place?" "+place:""))+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng+",11z")+"&hl=en&gl=in&api_key="+encodeURIComponent(anKey())).then(function(m){
+          return ((m.json&&m.json.local_results)||[]).filter(function(p){var t=(p.types||[]).join(" ")+" "+(p.type||"")+" "+(p.title||"");return firmLike(f,p.title||"")&&GOODTYPE.test(t)&&!BADTYPE.test(t);}).slice(0,2).map(function(p){
+            var x=serpNorm(p,cats[0].tag);if(x)x.match="“"+who[f].name+"” on "+(who[f].host||"the web");return x;});
+        });
+      }).then(function(all){all.forEach(function(a){if(a.ok)merge(a.ok,center,maxKm,"");});});
+    });
+  }).catch(function(){});
+}
+function searchByName(){
+  if(R.busy)return;
+  if(!curKey()){openSettings();if(SRC==="an")anMsg("Enter the NAS address or press Find NAS.",true);return;}
+  var nm=nameVal(),toks=nameTokens(nm);
+  if(!toks.length){note("Type the architect's name in English letters, for example Balwinder.",true);return;}
+  var cats=wanted();if(!cats.length){note("Choose at least one thing to look for.",true);return;}
+  var area=cityById(S.city),region=isRegion(area),radius=Math.max(S.radius,20);
+  var plan=region?regionPlan(area):null;
+  var calls=cats.length*(plan?plan.length:1);
+  if(usage().n+calls>limit()){note("You have used "+usage().n+" of the free searches this month. The app is paused until next month so you are never charged.",true);return;}
+  R.busy=true;R.loadingMore=false;$("go").disabled=true;$("go").textContent="Searching…";note("");
+  R.items=[];R.tokens={};R.shown=PAGE;R.autoStop=false;R.fromCache=false;skeleton();
+  var cp=area.cur?whereAmI():Promise.resolve({lat:area.lat,lng:area.lng});
+  cp.then(function(center){
+    R.center=center;R.area=region?area:null;R.nameQ=nm;R.place=area.cur?(nearestCityName(center)||"your area"):area.name;
+    var parts=plan||[{center:center,radius:radius,where:"",zoom:0}],jobs=[],maxKm=region?1e9:radius*1.5;
+    parts.forEach(function(pl){cats.forEach(function(cat){jobs.push({cat:cat,pl:pl});});});
+    return runJobs(jobs,3,function(jb){
+      var q=nm+" "+jb.cat.q+(jb.pl.where?" in "+jb.pl.where:""),ck=cacheKey(jb.pl.center,jb.pl.radius,jb.cat.id,q);
+      var cache=ld("anf-cache",{}),hit=cache[ck];
+      if(hit&&Date.now()-hit.t<12*3600*1000)return Promise.resolve(hit.items);
+      return fetchCat(jb.cat,jb.pl.center,jb.pl.radius,"",{q:q,zoom:jb.pl.zoom||serpZoom(jb.pl.center.lat,jb.pl.radius)}).then(function(items){
+        var c2=ld("anf-cache",{}),ks=Object.keys(c2);while(ks.length>60){delete c2[ks.shift()];}c2[ck]={t:Date.now(),items:items,tok:""};sv("anf-cache",c2);
+        return items;
+      });
+    },function(d,n){if(n>2)$("go").textContent="Searching… "+d+"/"+n;}).then(function(res){
+      var ok=0,firstErr=null;
+      res.forEach(function(r,k){
+        if(r.err){firstErr=firstErr||r.err;return;}
+        ok++;var pl=jobs[k].pl;
+        merge(r.ok.filter(function(x){return x&&nameHit(toks,x.name)&&!BADTYPE.test((x.typ||"")+" "+x.name);}).map(function(x){x.match="Name in firm name";return x;}),pl.center,maxKm,region&&parts.length>1?pl.where:"");
+      });
+      merge(knownOwners(toks,center,maxKm),center,maxKm,"");
+      R.tokens={};
+      if(!ok&&firstErr&&!anBase())throw firstErr;
+      $("go").textContent="Checking the web…";
+      return webLookup(nm,toks,cats,area,center,maxKm);
+    });
+  }).then(function(){
+    render();
+    if(!R.items.length)note("No firm found for “"+nm+"” in "+(R.place||"this area")+". Check the spelling, choose more categories, or pick the whole state.");
+  }).catch(function(e){
+    R.items=[];render();
+    note((e&&e.niceMsg)||(e&&e.message)||"Could not search. Check your internet connection.",true);
+  }).then(function(){R.busy=false;$("go").disabled=false;goLabel();paintMore();});
+}
+$("n-in").addEventListener("input",goLabel);
+$("n-in").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();$("n-in").blur();tick();search(false);}});
+
+/* ---------- radius: slide from 0.5 to 30 km in 0.1 km steps ---------- */
+function radiusHtml(){
+  return '<div class="rad"><button class="rbtn" data-rstep="-1" aria-label="Smaller">−</button>'+
+    '<input type="range" id="r-sl" min="0" max="1000" step="1" value="'+kmToPos(S.radius)+'" aria-label="Radius">'+
+    '<button class="rbtn" data-rstep="1" aria-label="Bigger">+</button><output id="r-val">'+fmtKm(S.radius)+'</output></div>';
+}
+function setRadius(k,final){
+  S.radius=clampR(k);
+  var o=$("r-val");if(o)o.textContent=fmtKm(S.radius);
+  var sl=$("r-sl");if(sl&&final!=="slider")sl.value=kmToPos(S.radius);
+  if(final)save();
+}
+function wireRadius(){
+  var sl=$("r-sl");if(!sl)return;
+  sl.addEventListener("input",function(){setRadius(posToKm(+sl.value),false);});
+  sl.addEventListener("change",function(){setRadius(posToKm(+sl.value),"slider");tick();});
+}
+S.radius=clampR(+S.radius||5);
 /* ---------- UI wiring ---------- */
 function paintChips(){
   $("cities").innerHTML=allCities().map(function(c){return '<button class="chip'+(S.city===c.id?" on":"")+'" data-c="'+esc(c.id)+'">'+esc(placeLabel(c))+'</button>';}).join("");
   var area=cityById(S.city);
   $("r-lab").textContent=isRegion(area)?"Area":"Radius";
-  $("radius").innerHTML=isRegion(area)?'<div class="whole">'+esc(regionText(area))+'</div>':RADII.map(function(r){return '<button class="chip km'+(S.radius===r?" on":"")+'" data-r="'+r+'">'+r+' km</button>';}).join("");
+  $("radius").innerHTML=isRegion(area)?'<div class="whole">'+esc(regionText(area))+'</div>':radiusHtml();
+  if(!isRegion(area))wireRadius();
   $("cats").innerHTML=CATS.map(function(c){return '<button class="chip'+(S.cats[c.id]?" on":"")+'" data-k="'+c.id+'">'+c.label+'</button>';}).join("");
 }
 function paintUsage(){
@@ -835,9 +986,11 @@ function save(){sv("anf-state",S);}
 
 document.addEventListener("click",function(e){
   if(!e.target.closest(".wsearch"))closeSug();
-  var t=e.target.closest("[data-sug],[data-sugmap],[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
+  var t=e.target.closest("[data-rstep],[data-sug],[data-sugmap],[data-sugname],[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
   if(t.dataset.sug!=null&&t.dataset.sug!==""){e.preventDefault();tick();var o=SUG[+t.dataset.sug];if(o)choosePlace(o.p);return;}
+  if(t.dataset.rstep){e.preventDefault();tick();setRadius(S.radius+0.1*(+t.dataset.rstep),true);return;}
   if(t.dataset.sugmap){e.preventDefault();tick();pickFromBox(true);return;}
+  if(t.dataset.sugname){e.preventDefault();tick();$("n-in").value=$("w-in").value.trim();$("w-in").value="";closeSug();goLabel();search(false);return;}
   if(t.dataset.edit!=null&&t.dataset.edit!==""){e.preventDefault();tick();openName(sorted()[+t.dataset.edit]);return;}
   if(t.dataset.src){SRC=t.dataset.src;sv("anf-src",SRC);paintSrc();paintUsage();return;}
   if(t.dataset.tel){e.preventDefault();tick();openUrl("tel:"+t.dataset.tel.replace(/[^\d+]/g,""));return;}
