@@ -777,6 +777,13 @@ function roll(){
   g.phase="rolling";setDiceReady(false);
   var d=1+Math.floor(Math.random()*6);
   if(LUDO.forceDice){d=LUDO.forceDice.shift()||d;}
+  // fairness: after 3-5 rolls with no six while every token is still home, the next roll is a six
+  var pc=cur().color;g.fails=g.fails||{};g.pity=g.pity||{};
+  if(allInYard(pc)){
+    if(!g.pity[pc])g.pity[pc]=3+Math.floor(Math.random()*3);
+    if((g.fails[pc]||0)>=g.pity[pc]&&d!==6){d=6;}
+  }
+  if(d===6)delete g.pity[pc];
   haptic("medium");
   var p3=R3?roll3D(d):(sfx.roll(),Promise.resolve());
   Promise.all([spinDice(d),p3]).then(function(){if(G!==g)return;g.dice=d;onRolled(d);});
