@@ -131,8 +131,8 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   </div>
   </div>
   <div class="lab" style="margin-top:22px">AN Search (Synology) — your NAS</div>
-  <p style="font-size:13px;color:var(--muted);margin:2px 0 8px">Free, no limit, works on the office Wi-Fi. After each search it looks up the architects' names on the web and shows them in brackets. Ratings and reviews still come from Google / SerpApi.</p>
-  <input type="text" id="an-url" placeholder="NAS address, e.g. 192.168.1.20:8856" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <p style="font-size:13px;color:var(--muted);margin:2px 0 8px">Free, no limit, works anywhere — office Wi-Fi or mobile data. The address and key are already filled in: just press Test. After each search it looks up the architects' names on the web and shows them in brackets. Ratings and reviews still come from Google / SerpApi.</p>
+  <input type="text" id="an-url" placeholder="search.audionation.synology.me" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="row" style="margin-top:8px"><button class="btn2" id="an-find">Find NAS</button><button class="btn2" id="an-test">Test</button></div>
   <input type="text" id="an-key" style="margin-top:8px" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="row" style="margin-top:8px"><button class="btn2" id="an-copy">Copy key</button><button class="btn2 pri" id="an-save">Save</button></div>
@@ -202,7 +202,9 @@ S.cats=S.cats||{arch:true,cons:true,int:false};
 var KEY=ld("anf-key","");
 var SRC=ld("anf-src","google"),SKEY=ld("anf-skey","");
 if(SRC==="an")SRC="google";
-var AN_DEFAULT="an-b5a63dd83162778db9a225bb",AN=ld("anf-an",{url:"",key:AN_DEFAULT});
+var AN_DEFAULT="an-b5a63dd83162778db9a225bb",AN_URL="search.audionation.synology.me",AN=ld("anf-an",{url:AN_URL,key:AN_DEFAULT});
+if(!AN.url||/:8856\b|^(https?:\/\/)?(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)|38\.137\.4\.75/.test(AN.url))AN.url=AN_URL;   // NAS is reached through DSM reverse proxy now
+if(!AN.key)AN.key=AN_DEFAULT;
 function anBase(){var b=String(AN.url||"").trim().replace(/\/+$/,"");return !b?"":/^https?:\/\//i.test(b)?b:"http://"+b;}
 function anKey(){return String(AN.key||"").trim()||AN_DEFAULT;}
 function curKey(){return SRC==="serp"?SKEY:SRC==="an"?(anBase()?anKey():""):KEY;}
@@ -333,7 +335,7 @@ function fetchAn(cat,center,radius){
     bump(1);
     var j=r.json||{};
     if(r.status===401)throw {niceMsg:"AN Search did not accept the key. Open Settings → AN Search and press Save."};
-    if(r.status!==200&&!j.local_results)throw {niceMsg:"AN Search (your NAS) is not reachable. Are you on the office Wi-Fi? Settings → AN Search → Test."};
+    if(r.status!==200&&!j.local_results)throw {niceMsg:"AN Search (your NAS) is not reachable. Check the internet, then Settings → AN Search → Test."};
     R.tokens[cat.id]="";
     return (j.local_results||[]).filter(function(p){return !offTopic(p.title,cat.id);}).map(function(p){
       var g=p.gps_coordinates||{};if(g.latitude==null)return null;
@@ -625,7 +627,7 @@ $("an-test").onclick=function(){
   anSave();if(!anBase()){anMsg("Enter the NAS address or press Find NAS.",true);return;}
   anMsg("Checking…");
   anReach(true).then(function(ok){
-    if(!ok){anMsg("The NAS did not answer. Check you are on the office Wi-Fi and the an-search project is running.",true);return;}
+    if(!ok){anMsg("The NAS did not answer. Check the internet on this iPhone, and that the an-search project is running on the NAS.",true);return;}
     getJson(anBase()+"/search.json?engine=google&inline_images=0&q=architect+Ludhiana&api_key="+encodeURIComponent(anKey())).then(function(r){
       if(r.status===401){anMsg("The NAS did not accept this key.",true);return;}
       var n=((r.json&&r.json.organic_results)||[]).length;
@@ -634,7 +636,16 @@ $("an-test").onclick=function(){
   });
 };
 $("an-find").onclick=function(){
-  if(!NATIVE){anMsg("Find NAS works inside the iPhone app.",true);return;}
+  anMsg("Looking for the NAS…");
+  var pub="http://"+AN_URL;
+  Promise.race([getJson(pub+"/health").then(function(r){return !!(r.json&&r.json.version);}).catch(function(){return false;}),
+    new Promise(function(res){setTimeout(function(){res(false);},4000);})]).then(function(ok){
+    if(ok){$("an-url").value=AN_URL;anSave();anMsg("Found AN Search at "+AN_URL+" ✓");return;}
+    if(!NATIVE){anMsg("NAS not found. Check the internet and that the an-search project is running.",true);return;}
+    findLan();
+  });
+};
+function findLan(){
   anMsg("Looking for the NAS on this Wi-Fi…");
   findCb=function(url){
     if(url){$("an-url").value=url;anSave();anMsg("Found AN Search at "+url+" ✓");}
