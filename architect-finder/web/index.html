@@ -65,6 +65,7 @@ main{padding:14px 16px 0;max-width:640px;margin:0 auto}
 .note{margin:14px 2px;padding:12px 14px;border-radius:14px;background:var(--chip);color:var(--ink2);font-size:14px}
 .err{background:#FDE8E2;color:#7A1F0B;border:1px solid #F4C2B4}
 @media (prefers-color-scheme:dark){.err{background:#3A1A14;color:#FFB9A6;border-color:#6A2A1D}}
+.end{text-align:center;color:var(--muted);font-size:13px;padding:14px 0 6px}
 .more{width:100%;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:14px;padding:14px;font:700 15px/1 -apple-system,sans-serif}
 .empty{text-align:center;color:var(--muted);padding:34px 14px}
 .empty svg{width:64px;height:64px;stroke:var(--line);fill:none;stroke-width:1.6;margin-bottom:8px}
@@ -411,7 +412,8 @@ function search(more){
   var calls=more?cats.filter(function(c){return R.tokens[c.id];}).length:cats.length*(plan?plan.length:1);
   if(usage().n+calls>limit()){note("You have used "+usage().n+" of the free searches this month. The app is paused until next month so you are never charged.",true);return;}
   R.busy=true;$("go").disabled=true;$("go").textContent="Searching…";note("");
-  if(!more){R.items=[];R.tokens={};skeleton();}
+  if(!more){R.items=[];R.tokens={};R.shown=PAGE;R.autoStop=false;skeleton();}
+  R.loadingMore=!!more;if(more)paintMore();
   var cp=area.cur?whereAmI():Promise.resolve({lat:area.lat,lng:area.lng});
   cp.then(function(center){
     R.center=center;
@@ -444,9 +446,10 @@ function search(more){
     render();
     if(!R.items.length)note(region?"No results in "+area.name+". Try another category.":"No results in this area. Try a bigger radius or another category.");
   }).catch(function(e){
+    if(more)R.autoStop=true;
     if(!more)R.items=[];render();
     note((e&&e.niceMsg)||(e&&e.message)||"Could not search. Check your internet connection.",true);
-  }).then(function(){R.busy=false;$("go").disabled=false;$("go").textContent="Search";});
+  }).then(function(){R.busy=false;R.loadingMore=false;$("go").disabled=false;$("go").textContent="Search";paintMore();setTimeout(nearEnd,60);});
 }
 function note(t,err){$("notice").innerHTML=t?'<div class="note'+(err?' err':'')+'">'+esc(t)+'</div>':"";}
 function skeleton(){$("meta").hidden=true;$("more").innerHTML="";$("list").innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';}
@@ -508,7 +511,7 @@ var scanId=0;
 function scanNames(){
   if(!NATIVE)return;
   var my=++scanId,now=Date.now();
-  var todo=sorted().slice(0,40).filter(function(p){
+  var todo=sorted().slice(0,Math.min(Math.max(R.shown||PAGE,40),120)).filter(function(p){
     var n=NAMES[p.id]||{};
     return p.web&&!SKIPHOST.test(p.web)&&!n.m&&!n.a&&!(n.v===2&&n.t&&now-n.t<30*86400000)&&!nameFromTitle(p.name);
   });
@@ -565,7 +568,8 @@ function render(){
   var city=cityById(S.city);
   $("count").textContent=a.length+(R.area?" found in "+R.area.name:" found within "+S.radius+" km")+(R.fromCache?" · saved results":"");
   $("sort").innerHTML=SORTS.filter(function(s){return !(R.area&&s.id==="near");}).map(function(s){return '<button data-s="'+s.id+'" class="'+(S.sort===s.id?"on":"")+'">'+s.label+'</button>';}).join("");
-  $("list").innerHTML=a.length?a.map(function(p,i){
+  var shown=a.slice(0,R.shown||PAGE);
+  $("list").innerHTML=a.length?shown.map(function(p,i){
     var pct=Math.max(0,Math.min(100,p.rating/5*100));
     var hasR=p.votes>0;
     return '<article class="card" data-i="'+i+'" data-id="'+esc(p.id)+'">'+
@@ -580,10 +584,31 @@ function render(){
         (p.web?'<a class="act" data-web="'+esc(p.web)+'" href="#">'+ICON.web+'Site</a>':'')+
       '</div></article>';
   }).join(""):(R.busy?"":'<div class="empty"><svg viewBox="0 0 64 64"><circle cx="28" cy="28" r="18"/><path d="M41 41l16 16"/></svg><div>Pick a city, a whole state or India,<br>then tap Search.</div></div>');
-  var more=CATS.some(function(c){return S.cats[c.id]&&R.tokens[c.id];});
-  $("more").innerHTML=a.length&&more?'<button class="more" id="b-more">Load more results</button>':"";
+  paintMore();
   scanNames();
+  setTimeout(nearEnd,60);
 }
+function paintMore(){
+  var a=R.items,more=a.length>(R.shown||PAGE)||CATS.some(function(c){return S.cats[c.id]&&R.tokens[c.id];});
+  $("more").innerHTML=!a.length?"":R.loadingMore?'<div class="end">Loading more…</div>':more&&!R.autoStop?'<button class="more" id="b-more">Load more results</button>':'<div class="end">That’s all — '+a.length+' results</div>';
+}
+/* endless list: when the bottom comes near, show the next part (and fetch the next page when all are shown) */
+var PAGE=25;
+function loadMore(){
+  if(R.busy||R.autoStop)return;
+  var a=sorted();
+  if((R.shown||PAGE)<a.length){R.shown=(R.shown||PAGE)+PAGE;render();return;}
+  if(CATS.some(function(c){return S.cats[c.id]&&R.tokens[c.id];})){R.shown=(R.shown||PAGE)+PAGE;search(true);}
+}
+function nearEnd(){
+  var el=$("more");if(!el||!el.firstChild||!$("b-more"))return;
+  if(el.getBoundingClientRect().top<window.innerHeight+700)loadMore();
+}
+if("IntersectionObserver" in window){
+  new IntersectionObserver(function(es){if(es.some(function(e){return e.isIntersecting;}))loadMore();},{rootMargin:"0px 0px 700px 0px"}).observe($("more"));
+}
+var scrollT=0;
+window.addEventListener("scroll",function(){if(scrollT)return;scrollT=setTimeout(function(){scrollT=0;nearEnd();},150);},{passive:true});
 function fmtDist(d){return d<1?(Math.max(10,Math.round(d*100)*10)+" m"):(d.toFixed(1)+" km");}
 function mapUrl(p){return p.maps||("https://maps.apple.com/?ll="+p.lat+","+p.lng+"&q="+encodeURIComponent(p.name));}
 
@@ -820,7 +845,7 @@ document.addEventListener("click",function(e){
   if(t.dataset.web){e.preventDefault();openUrl(t.dataset.web);return;}
   if(t.dataset.del!=null){CUSTOM.splice(+t.dataset.del,1);sv("anf-cities",CUSTOM);if(!allCities().some(function(c){return c.id===S.city;})){S.city="ludhiana";save();}paintCities();paintChips();return;}
   if(t.id==="c-add"){$("city-in").value="";$("city-msg").hidden=true;$("sheet-city").classList.add("open");setTimeout(function(){$("city-in").focus();},200);return;}
-  if(t.id==="b-more"){search(true);return;}
+  if(t.id==="b-more"){loadMore();return;}
   tick();
   if(t.dataset.c){S.city=t.dataset.c;}
   if(t.dataset.r){S.radius=+t.dataset.r;}
