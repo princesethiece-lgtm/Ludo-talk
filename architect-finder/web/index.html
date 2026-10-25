@@ -160,9 +160,14 @@ var BUILTIN=[
 var RADII=[1,2,3,4,5,8,9,10,12,15,25];
 var CATS=[
   {id:"arch",label:"Architects",q:"architect",tag:"Architect"},
-  {id:"cons",label:"Consultants",q:"architectural consultant",tag:"Consultant"},
+  {id:"cons",label:"Lighting consultants",q:"lighting consultant",tag:"Lighting consultant"},
   {id:"int",label:"Interior designers",q:"interior designer",tag:"Interior"}
 ];
+/* Google's text search is fuzzy: a query for "lighting consultant" or "interior designer"
+   still turns up plain architecture firms. When a category other than Architects is
+   searched on its own, drop anything clearly named as an architecture firm so results
+   stay on-topic; a firm still shows under "All" if it also matches the Architects query. */
+function offTopic(name,catId){return catId!=="arch"&&/\barchitects?\b/i.test(name||"");}
 var SORTS=[{id:"best",label:"Best"},{id:"reviews",label:"Reviews"},{id:"rating",label:"Rating"},{id:"near",label:"Nearest"}];
 var MASK="places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.internationalPhoneNumber,places.googleMapsUri,places.websiteUri,places.businessStatus,nextPageToken";
 
@@ -237,7 +242,7 @@ function niceError(r){
 
 /* ---------- search ---------- */
 function bounds(c,r){var dl=r/110.574,dg=r/(111.32*Math.cos(c.lat*Math.PI/180));return {low:{latitude:c.lat-dl,longitude:c.lng-dg},high:{latitude:c.lat+dl,longitude:c.lng+dg}};}
-function cacheKey(c,r,cat){return [SRC,c.lat.toFixed(2),c.lng.toFixed(2),r,cat].join("|");}
+function cacheKey(c,r,cat,q){return [SRC,c.lat.toFixed(2),c.lng.toFixed(2),r,cat,q].join("|");}
 function wanted(){return CATS.filter(function(c){return S.cats[c.id];});}
 function norm(p,cat){
   if(!p||!p.location||p.businessStatus==="CLOSED_PERMANENTLY")return null;
@@ -274,7 +279,7 @@ function fetchSerp(cat,center,radius,token){
     }
     var list=j.local_results||(j.place_results?[j.place_results]:[]);
     R.tokens[cat.id]=list.length>=20?String(start+20):"";
-    return list.map(function(p){return serpNorm(p,cat.tag);});
+    return list.filter(function(p){return !offTopic(p&&p.title,cat.id);}).map(function(p){return serpNorm(p,cat.tag);});
   });
 }
 function fetchCat(cat,center,radius,token){
@@ -285,7 +290,7 @@ function fetchCat(cat,center,radius,token){
     bump(1);
     if(r.status!==200)throw {niceMsg:niceError(r)};
     var j=r.json||{};R.tokens[cat.id]=j.nextPageToken||"";
-    return (j.places||[]).map(function(p){return norm(p,cat.tag);});
+    return (j.places||[]).filter(function(p){return !offTopic(p&&p.displayName&&p.displayName.text,cat.id);}).map(function(p){return norm(p,cat.tag);});
   });
 }
 function search(more){
@@ -301,7 +306,7 @@ function search(more){
   cp.then(function(center){
     R.center=center;
     var jobs=cats.map(function(cat){
-      var ck=cacheKey(center,radius,cat.id);
+      var ck=cacheKey(center,radius,cat.id,cat.q);
       if(!more){
         var cache=ld("anf-cache",{}),hit=cache[ck];
         if(hit&&Date.now()-hit.t<12*3600*1000){R.tokens[cat.id]=hit.tok||"";R.fromCache=true;R.cachedAt=Math.min(R.cachedAt||hit.t,hit.t);return Promise.resolve(hit.items);}
