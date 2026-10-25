@@ -1,0 +1,52 @@
+name: Build AN Lead Finder (.ipa)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lead-finder/**"
+      - ".github/workflows/build-leadfinder-ipa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: lead-finder
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app (unsigned; AltServer or Sideloadly signs it on your PC)
+        run: |
+          xcodebuild -project LeadFinder.xcodeproj -scheme LeadFinder -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package .ipa
+        run: |
+          APP="build/Build/Products/Release-iphoneos/LeadFinder.app"
+          test -d "$APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry AN-LeadFinder.ipa Payload
+          ls -lh AN-LeadFinder.ipa
+
+      - name: Publish as a release download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: leadfinder-${{ github.run_number }}
+          name: AN Lead Finder build ${{ github.run_number }}
+          files: lead-finder/AN-LeadFinder.ipa
+          make_latest: false
