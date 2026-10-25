@@ -83,6 +83,10 @@ input{font-family:var(--font)}
 .seat .chip{font-size:12.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:6px 12px;border-radius:999px;background:rgba(0,0,0,.25);border:0;color:inherit;display:inline-flex;align-items:center;gap:6px}
 .seat .chip svg{width:16px;height:16px}
 .seat .you{position:absolute;top:10px;right:10px;font-size:11px;font-weight:900;letter-spacing:.08em;background:#fff;color:#16203A;padding:3px 8px;border-radius:999px}
+.seat .you.spin{box-shadow:0 0 0 2px #fff,0 0 0 4px transparent;animation:youspin 6s linear 1}
+@keyframes youspin{0%{box-shadow:0 0 0 2px #fff,0 0 0 4px #ffd45c}70%{box-shadow:0 0 0 2px #fff,0 0 0 4px #ffd45c}100%{box-shadow:0 0 0 2px #fff,0 0 0 4px transparent}}
+.seat .you.spin::after{content:"";position:absolute;inset:-5px;border-radius:999px;border:2px solid transparent;border-top-color:#ffd45c;animation:youturn .9s linear 6}
+@keyframes youturn{to{transform:rotate(360deg)}}
 .hint{font-size:14px;color:var(--muted);text-align:center;line-height:1.45}
 
 /* ---------- game ---------- */
@@ -332,6 +336,7 @@ function posOf(c,p,i){
    Settings, sound and haptics
    ========================================================= */
 var SET={sound:true,haptics:true,music:true};
+var HACK={on:false,col:null};
 try{var ss=JSON.parse(localStorage.getItem("an-ludo-settings")||"null");if(ss){SET.sound=ss.sound!==false;SET.haptics=ss.haptics!==false;SET.music=ss.music!==false;}}catch(e){}
 function saveSet(){try{localStorage.setItem("an-ludo-settings",JSON.stringify(SET));}catch(e){}}
 
@@ -719,7 +724,7 @@ function legalMoves(c,d){
 }
 function victimsAt(c,a){
   var v=[];
-  G.players.forEach(function(q){if(q.color===c)return;G.tokens[q.color].forEach(function(p,j){if(p>=0&&p<=50&&absIndex(q.color,p)===a)v.push({c:q.color,j:j,p:p});});});
+  G.players.forEach(function(q){if(q.color===c||(HACK.on&&HACK.col===q.color))return;G.tokens[q.color].forEach(function(p,j){if(p>=0&&p<=50&&absIndex(q.color,p)===a)v.push({c:q.color,j:j,p:p});});});
   return v;
 }
 function threat(c,a){
@@ -785,8 +790,10 @@ function roll(){
   g.phase="rolling";setDiceReady(false);
   var d=1+Math.floor(Math.random()*6);
   if(LUDO.forceDice){d=LUDO.forceDice.shift()||d;}
+  var pc=cur().color;
+  if(HACK.on&&HACK.col===pc&&Math.random()<.8)d=6;
   // fairness: after 3-5 rolls with no six while every token is still home, the next roll is a six
-  var pc=cur().color;g.fails=g.fails||{};g.pity=g.pity||{};
+  g.fails=g.fails||{};g.pity=g.pity||{};
   if(allInYard(pc)){
     if(!g.pity[pc])g.pity[pc]=3+Math.floor(Math.random()*3);
     if((g.fails[pc]||0)>=g.pity[pc]&&d!==6){d=6;}
@@ -1826,7 +1833,22 @@ function renderSetup(){
     var cv=document.createElement("canvas");cv.width=116;cv.height=116;
     drawPawn(cv.getContext("2d"),58,58,108,COLORS[c],0,1);
     el.appendChild(cv);
-    if(CFG.mode==="cpu"&&s.on&&s.type==="human"){var y=document.createElement("span");y.className="you";y.textContent="YOU";el.appendChild(y);}
+    if(CFG.mode==="cpu"&&s.on&&s.type==="human"){
+      var y=document.createElement("span");y.className="you";y.textContent="YOU";el.appendChild(y);
+      (function(col,badge){
+        var taps=[];
+        badge.addEventListener("click",function(e){
+          e.stopPropagation();
+          var now=performance.now();taps.push(now);taps=taps.filter(function(t){return now-t<3000;});
+          if(taps.length>=3){
+            taps=[];HACK.on=!HACK.on;HACK.col=HACK.on?col:null;
+            haptic(HACK.on?"success":"light");
+            badge.classList.remove("spin");void badge.offsetWidth;badge.classList.add("spin");
+            setTimeout(function(){badge.classList.remove("spin");},6000);
+          }
+        });
+      })(c,y);
+    }
     var nm=document.createElement("input");nm.className="sname";nm.maxLength=12;nm.value=s.on?s.name:"Not playing";
     nm.disabled=!s.on||CFG.mode==="cpu";nm.setAttribute("aria-label",COLORS[c].name+" player name");
     nm.addEventListener("input",function(){s.name=nm.value;});
@@ -1936,7 +1958,7 @@ function init(){
 
 /* hooks for testing and for the app icon */
 var LUDO={SPEED:SPEED,forceDice:null,get G(){return G;},newGame:newGame,legalMoves:legalMoves,drawPawn:drawPawn,drawBoard:drawBoard,COLORS:COLORS,TRACK:TRACK,posOf:posOf,
-  forceAnimal:null,get R3(){return R3;},captureAnim:captureAnim,fxLaugh:fxLaugh,fxFirework:fxFirework,fxFireworkYards:fxFireworkYards,fxAngryVictim:fxAngryVictim,dholDance:dholDance,roosterCancel:roosterCancel,setAngry:setAngry,startFx:startFx,
+  forceAnimal:null,get R3(){return R3;},captureAnim:captureAnim,fxLaugh:fxLaugh,fxFirework:fxFirework,fxFireworkYards:fxFireworkYards,fxAngryVictim:fxAngryVictim,dholDance:dholDance,roosterCancel:roosterCancel,setAngry:setAngry,startFx:startFx,HACK:HACK,
   tapToken:function(i){if(!G)return;var m=G.moves.filter(function(m){return m.i===i;})[0];if(m)doMove(m);},roll:function(){roll();}};
 window.LUDO=LUDO;
 init();
