@@ -72,9 +72,12 @@ final class FinderViewController: UIViewController, WKScriptMessageHandler, CLLo
         guard let id = b["id"] as? Int, let s = b["url"] as? String, let url = URL(string: s) else { return }
         var req = URLRequest(url: url, timeoutInterval: 20)
         if (b["method"] as? String) == "GET" {
+            req.timeoutInterval = 10
+            req.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", forHTTPHeaderField: "User-Agent")
             URLSession.shared.dataTask(with: req) { [weak self] data, resp, err in
                 let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-                let text = data ?? Data((err?.localizedDescription ?? "").utf8)
+                let raw = data ?? Data((err?.localizedDescription ?? "").utf8)
+                let text = raw.prefix(600_000)
                 let b64 = text.base64EncodedString()
                 DispatchQueue.main.async {
                     self?.webView.evaluateJavaScript("window.__nf(\(id),\(status),'\(b64)')", completionHandler: nil)

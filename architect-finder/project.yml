@@ -27,6 +27,8 @@ targets:
         UIRequiresFullScreen: true
         NSLocationWhenInUseUsageDescription: "AN Architects uses your location to find architects and consultants near you."
         LSApplicationQueriesSchemes: [tel, comgooglemaps, maps]
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.audionation.architectfinder
