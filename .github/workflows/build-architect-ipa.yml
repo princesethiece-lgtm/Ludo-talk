@@ -1,0 +1,52 @@
+name: Build AN Architects (.ipa)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "architect-finder/**"
+      - ".github/workflows/build-architect-ipa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: architect-finder
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build app (unsigned; AltServer or Sideloadly signs it on your PC)
+        run: |
+          xcodebuild -project ArchitectFinder.xcodeproj -scheme ArchitectFinder -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package .ipa
+        run: |
+          APP="build/Build/Products/Release-iphoneos/ArchitectFinder.app"
+          test -d "$APP"
+          rm -rf Payload && mkdir Payload && cp -R "$APP" Payload/
+          zip -qry AN-Architects.ipa Payload
+          ls -lh AN-Architects.ipa
+
+      - name: Publish as a release download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: architects-${{ github.run_number }}
+          name: AN Architects build ${{ github.run_number }}
+          files: architect-finder/AN-Architects.ipa
+          make_latest: false

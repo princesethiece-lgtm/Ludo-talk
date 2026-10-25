@@ -1,0 +1,4 @@
+architect-finder/*.xcodeproj
+architect-finder/App/Info.plist
+architect-finder/build/
+architect-finder/Payload/

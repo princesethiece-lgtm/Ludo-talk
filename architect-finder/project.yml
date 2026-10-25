@@ -1,0 +1,42 @@
+name: ArchitectFinder
+options:
+  bundleIdPrefix: com.audionation
+  deploymentTarget:
+    iOS: "15.0"
+targets:
+  ArchitectFinder:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: web
+        type: folder
+        buildPhase: resources
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: AN Architects
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: LaunchBG
+        UIRequiredDeviceCapabilities: [arm64]
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIViewControllerBasedStatusBarAppearance: true
+        UIRequiresFullScreen: true
+        NSLocationWhenInUseUsageDescription: "AN Architects uses your location to find architects and consultants near you."
+        LSApplicationQueriesSchemes: [tel, comgooglemaps, maps]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.audionation.architectfinder
+        PRODUCT_NAME: ArchitectFinder
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGN_IDENTITY: ""
+    scheme: {}

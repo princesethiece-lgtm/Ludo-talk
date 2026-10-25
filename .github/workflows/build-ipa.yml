@@ -3,6 +3,8 @@ name: Build iPhone app (.ipa)
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "architect-finder/**"
   workflow_dispatch:
 
 permissions:
