@@ -26,9 +26,11 @@ targets:
         UIViewControllerBasedStatusBarAppearance: true
         UIRequiresFullScreen: true
         NSLocationWhenInUseUsageDescription: "AN Architects uses your location to find architects and consultants near you."
+        NSLocalNetworkUsageDescription: "AN Architects looks for your AN Search server (Synology NAS) on the office Wi-Fi."
         LSApplicationQueriesSchemes: [tel, comgooglemaps, maps]
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.audionation.architectfinder

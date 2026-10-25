@@ -62,8 +62,69 @@ final class FinderViewController: UIViewController, WKScriptMessageHandler, CLLo
             requestLocation()
         case "fetch":
             runFetch(body)
+        case "findnas":
+            findNas()
+        case "copy":
+            UIPasteboard.general.string = body["text"] as? String ?? ""
+            tap.impactOccurred()
         default:
             break
+        }
+    }
+
+    // MARK: AN Search — look for the NAS (port 8856) on this Wi-Fi network
+    private func wifiAddress() -> String? {
+        var found: String?
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
+        var p: UnsafeMutablePointer<ifaddrs>? = first
+        while let a = p {
+            let flags = Int32(truncatingIfNeeded: a.pointee.ifa_flags)
+            if let sa = a.pointee.ifa_addr, sa.pointee.sa_family == UInt8(AF_INET), (flags & IFF_LOOPBACK) == 0, (flags & IFF_UP) != 0 {
+                var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+                if getnameinfo(sa, socklen_t(sa.pointee.sa_len), &host, socklen_t(host.count), nil, 0, NI_NUMERICHOST) == 0 {
+                    let ip = String(cString: host)
+                    let name = String(cString: a.pointee.ifa_name)
+                    let priv = ip.hasPrefix("192.168.") || ip.hasPrefix("10.") || ip.hasPrefix("172.")
+                    if priv && (name == "en0" || found == nil) { found = ip }
+                }
+            }
+            p = a.pointee.ifa_next
+        }
+        freeifaddrs(ifaddr)
+        return found
+    }
+
+    private func findNas() {
+        guard let me = wifiAddress() else { replyFind(""); return }
+        let prefix = me.split(separator: ".").prefix(3).joined(separator: ".")
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.timeoutIntervalForRequest = 2
+        cfg.timeoutIntervalForResource = 3
+        let session = URLSession(configuration: cfg)
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var hit: String?
+        for i in 1...254 {
+            let base = "http://\(prefix).\(i):8856"
+            guard let url = URL(string: base + "/health") else { continue }
+            group.enter()
+            session.dataTask(with: url) { data, _, _ in
+                defer { group.leave() }
+                guard let d = data, let j = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                      j["version"] != nil, j["searxng"] != nil else { return }
+                lock.lock(); if hit == nil { hit = base }; lock.unlock()
+            }.resume()
+        }
+        group.notify(queue: .main) { [weak self] in
+            session.finishTasksAndInvalidate()
+            self?.replyFind(hit ?? "")
+        }
+    }
+
+    private func replyFind(_ url: String) {
+        DispatchQueue.main.async { [weak self] in
+            self?.webView.evaluateJavaScript("window.__nfind('\(url)')", completionHandler: nil)
         }
     }
 

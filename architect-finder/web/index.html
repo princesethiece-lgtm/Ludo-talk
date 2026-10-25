@@ -122,16 +122,25 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   <h2 class="serif">Settings</h2>
   <div class="lab" style="margin-top:14px">Data source</div>
   <div class="row" id="src-row"></div>
+  <div id="key-wrap">
   <div class="lab" id="key-lab" style="margin-top:16px">Google Places API key</div>
   <input type="password" id="key" placeholder="Paste your key here" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="row" style="margin-top:10px">
     <button class="btn2 pri" id="key-save">Save key</button>
     <button class="btn2" id="key-clear">Remove</button>
   </div>
+  </div>
+  <div class="lab" style="margin-top:22px">AN Search (Synology) — your NAS</div>
+  <p style="font-size:13px;color:var(--muted);margin:2px 0 8px">Free, no limit, works on the office Wi-Fi. After each search it looks up the architects' names on the web and shows them in brackets. Ratings and reviews still come from Google / SerpApi.</p>
+  <input type="text" id="an-url" placeholder="NAS address, e.g. 192.168.1.20:8856" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <div class="row" style="margin-top:8px"><button class="btn2" id="an-find">Find NAS</button><button class="btn2" id="an-test">Test</button></div>
+  <input type="text" id="an-key" style="margin-top:8px" autocomplete="off" autocapitalize="off" spellcheck="false">
+  <div class="row" style="margin-top:8px"><button class="btn2" id="an-copy">Copy key</button><button class="btn2 pri" id="an-save">Save</button></div>
+  <div id="an-msg" class="note" hidden></div>
   <div class="lab" style="margin-top:20px">Free searches this month</div>
   <div class="usage"><i id="u-bar"></i></div>
   <p id="u-txt" style="margin-top:2px"></p>
-  <p style="font-size:13px;color:var(--muted)">The app stops before the free allowance ends (900 for Google, 230 for SerpApi) so you are never charged. Repeating the same search within 12 hours uses saved results and is not counted.</p>
+  <p style="font-size:13px;color:var(--muted)">The app stops before the free allowance ends (900 for Google, 230 for SerpApi) so you are never charged. AN Search on your NAS has no limit. Repeating the same search within 12 hours uses saved results and is not counted.</p>
   <div class="lab" style="margin-top:18px">Added cities</div>
   <div id="city-list"></div>
   <div class="row" style="margin-top:14px"><button class="btn2" id="clear-cache">Clear saved results</button></div>
@@ -192,9 +201,13 @@ var S=ld("anf-state",{city:"ludhiana",radius:5,cats:{arch:true,cons:true,int:fal
 S.cats=S.cats||{arch:true,cons:true,int:false};
 var KEY=ld("anf-key","");
 var SRC=ld("anf-src","google"),SKEY=ld("anf-skey","");
-function curKey(){return SRC==="serp"?SKEY:KEY;}
-function limit(){return SRC==="serp"?230:LIMIT;}
-function ukey(){return SRC==="serp"?"anf-usage-s":"anf-usage";}
+if(SRC==="an")SRC="google";
+var AN_DEFAULT="an-b5a63dd83162778db9a225bb",AN=ld("anf-an",{url:"",key:AN_DEFAULT});
+function anBase(){var b=String(AN.url||"").trim().replace(/\/+$/,"");return !b?"":/^https?:\/\//i.test(b)?b:"http://"+b;}
+function anKey(){return String(AN.key||"").trim()||AN_DEFAULT;}
+function curKey(){return SRC==="serp"?SKEY:SRC==="an"?(anBase()?anKey():""):KEY;}
+function limit(){return SRC==="serp"?230:SRC==="an"?1e9:LIMIT;}
+function ukey(){return SRC==="serp"?"anf-usage-s":SRC==="an"?"anf-usage-a":"anf-usage";}
 var CUSTOM=ld("anf-cities",[]);
 function monthId(){var d=new Date();return d.getFullYear()+"-"+(d.getMonth()+1);}
 function usage(){var u=ld(ukey(),null);if(!u||u.m!==monthId())u={m:monthId(),n:0};return u;}
@@ -213,6 +226,8 @@ function tick(){if(NATIVE)NATIVE.postMessage({t:"haptic"});}
 /* ---------- native bridge ---------- */
 var pend={},pid=0,locCb=null;
 window.__nf=function(id,status,b64){var cb=pend[id];if(!cb)return;delete pend[id];var t="";try{t=decodeURIComponent(escape(atob(b64)));}catch(e){try{t=atob(b64);}catch(e2){}}cb(status,t);};
+var findCb=null;
+window.__nfind=function(url){if(findCb){var f=findCb;findCb=null;f(url||"");}};
 window.__nloc=function(lat,lng,err){if(locCb){var f=locCb;locCb=null;f(err?null:{lat:lat,lng:lng},err);}};
 function post(body,mask){
   return new Promise(function(res,rej){
@@ -296,8 +311,88 @@ function fetchSerp(cat,center,radius,token){
     return list.filter(function(p){return !offTopic(p&&p.title,cat.id);}).map(function(p){return serpNorm(p,cat.tag);});
   });
 }
+/* ---------- AN Search (Synology) on the office network ---------- */
+var anState={at:0,ok:false,base:""};
+function anReach(force){
+  var b=anBase();if(!b)return Promise.resolve(false);
+  if(!force&&anState.base===b&&Date.now()-anState.at<60000)return Promise.resolve(anState.ok);
+  return Promise.race([
+    getJson(b+"/health").then(function(r){return !!(r.json&&r.json.version);}).catch(function(){return false;}),
+    new Promise(function(res){setTimeout(function(){res(false);},2500);})
+  ]).then(function(ok){anState={at:Date.now(),ok:ok,base:b};return ok;});
+}
+function nearestCityName(c){
+  var best=null,bd=1e9;
+  allCities().forEach(function(x){if(x.cur)return;var d=hav(c.lat,c.lng,x.lat,x.lng);if(d<bd){bd=d;best=x;}});
+  return best&&bd<40?best.name:"";
+}
+function fetchAn(cat,center,radius){
+  var city=cityById(S.city),cname=city.cur?nearestCityName(center):city.name;
+  var url=anBase()+"/search.json?engine=google_maps&num=60&q="+encodeURIComponent(cat.q+(cname?" "+cname:""))+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng)+"&api_key="+encodeURIComponent(anKey());
+  return getJson(url).then(function(r){
+    bump(1);
+    var j=r.json||{};
+    if(r.status===401)throw {niceMsg:"AN Search did not accept the key. Open Settings → AN Search and press Save."};
+    if(r.status!==200&&!j.local_results)throw {niceMsg:"AN Search (your NAS) is not reachable. Are you on the office Wi-Fi? Settings → AN Search → Test."};
+    R.tokens[cat.id]="";
+    return (j.local_results||[]).filter(function(p){return !offTopic(p.title,cat.id);}).map(function(p){
+      var g=p.gps_coordinates||{};if(g.latitude==null)return null;
+      return {id:"an:"+(p.place_id||p.title),name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:0,votes:0,
+        phone:p.phone||"",tel:p.phone||"",maps:"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent((p.title||"")+" "+(p.address||"")),web:p.website||"",cats:[cat.tag]};
+    });
+  });
+}
+function nameFromResults(list,firm){
+  // only accept a name that the text clearly ties to THIS firm ("X Y, founder of Firm", "Firm founded by X Y",
+  // LinkedIn "X Y - Principal Architect - Firm"); loose mentions are ignored so wrong names don't show up
+  var ci=function(w){return w.replace(/[^A-Za-z0-9]/g,function(c){return "\\"+c;}).replace(/[A-Za-z]/g,function(c){return "["+c.toLowerCase()+c.toUpperCase()+"]";});};
+  var fw=String(firm||"").replace(/^(ar|er)\.?\s+/i,"").split(/\s+/).filter(Boolean);
+  if(!fw.length)return "";
+  var FE=fw.map(ci).join("\\s+");
+  var ROLE="(?:"+["co-founder","cofounder","founding partner","founding principal","founder","principal architect","principal","managing director","director","proprietor","owner","partner","lead architect","chief architect"].map(function(r){return r.split(" ").map(ci).join("\\s+");}).join("|")+")";
+  var N="((?:Ar\\.?\\s+)?[A-Z][a-z]+(?:\\s[A-Z][a-z]+){1,2})";
+  var OF="(?:"+ci("of")+"|"+ci("at")+"|,)";
+  var pats=[
+    new RegExp("^"+N+"\\s*[-\u2013|,:]\\s*(?:"+ci("the")+"\\s+)?"+ROLE+"\\s*(?:[-\u2013|,@]|"+ci("at")+"|"+ci("of")+")\\s*"+FE),
+    new RegExp(N+",?\\s+(?:"+ci("the")+"\\s+)?"+ROLE+"\\s+"+OF+"\\s+"+FE),
+    new RegExp(ROLE+"\\s+"+OF+"\\s+"+FE+"\\s*[,:\\-\u2013]?\\s*(?:"+ci("is")+"\\s+)?"+N),
+    new RegExp(FE+"[^.]{0,20}?\\s+(?:"+ci("is")+"\\s+|"+ci("was")+"\\s+)?(?:"+["founded","led","headed","started","run"].map(ci).join("|")+")\\s+"+ci("by")+"\\s+"+N)
+  ];
+  for(var i=0;i<list.length;i++){
+    var t=String(list[i].title||""),sn=String(list[i].snippet||"");
+    var texts=[t,sn];
+    for(var k=0;k<texts.length;k++)for(var q=0;q<pats.length;q++){
+      if(q===0&&k!==0)continue;   // "Name - Role - Firm" only in page titles (LinkedIn style)
+      var m=pats[q].exec(texts[k]);if(!m)continue;
+      var w=m[1].replace(/^Ar\.?\s+/,"").split(/\s+/);
+      while(w.length&&NSTOP.test(w[w.length-1]))w.pop();while(w.length&&NSTOP.test(w[0]))w.shift();
+      if(titleCaseWords(w)&&w.join(" ").toLowerCase()!==fw.join(" ").toLowerCase())return w.map(tcase).join(" ");
+    }
+  }
+  return "";
+}
+function anNames(my){
+  anReach().then(function(ok){
+    if(!ok||my!==scanId)return;
+    var now=Date.now(),city=cityById(S.city),cname=city.cur?(R.center?nearestCityName(R.center):""):city.name;
+    var todo=sorted().slice(0,12).filter(function(p){var n=NAMES[p.id]||{};return !n.m&&!n.a&&!nameFromTitle(p.name)&&!(n.an&&now-n.an<30*86400000);});
+    var i=0;
+    function next(){
+      if(my!==scanId||i>=todo.length)return Promise.resolve();
+      var p=todo[i++];
+      var url=anBase()+"/search.json?engine=google&inline_images=0&num=10&q="+encodeURIComponent(p.name+(cname?" "+cname:"")+" architect founder")+"&api_key="+encodeURIComponent(anKey());
+      return getJson(url).then(function(r){
+        var a=r.status===200&&r.json?nameFromResults(r.json.organic_results||[],p.name):"";
+        var n=NAMES[p.id]||{};n.an=Date.now();if(a&&!n.m){n.a=a;n.src="web";}NAMES[p.id]=n;sv("anf-names",NAMES);
+        if(a)paintOwner(p);
+      }).catch(function(){}).then(next);
+    }
+    next();next();
+  });
+}
 function fetchCat(cat,center,radius,token){
   if(SRC==="serp")return fetchSerp(cat,center,radius,token);
+  if(SRC==="an")return fetchAn(cat,center,radius);
   var body={textQuery:cat.q,locationRestriction:{rectangle:bounds(center,radius)},pageSize:20,languageCode:"en",regionCode:"IN"};
   if(token)body.pageToken=token;
   return post(body,MASK).then(function(r){
@@ -309,7 +404,7 @@ function fetchCat(cat,center,radius,token){
 }
 function search(more){
   if(R.busy)return;
-  if(!curKey()){openSettings();return;}
+  if(!curKey()){openSettings();if(SRC==="an")anMsg("Enter the NAS address or press Find NAS.",true);return;}
   var cats=wanted();if(!cats.length){note("Choose at least one thing to look for.",true);return;}
   var calls=more?cats.filter(function(c){return R.tokens[c.id];}).length:cats.length;
   if(usage().n+calls>limit()){note("You have used "+usage().n+" of the free searches this month. The app is paused until next month so you are never charged.",true);return;}
@@ -425,7 +520,7 @@ function scanNames(){
       if(a)paintOwner(p);
     }).catch(function(){NAMES[p.id]={a:"",t:Date.now(),v:2};sv("anf-names",NAMES);}).then(next);
   }
-  next();next();next();next();
+  Promise.all([next(),next(),next(),next()]).then(function(){if(my===scanId)anNames(my);});
 }
 function paintOwner(p){
   var el=document.querySelector('.card[data-id="'+(window.CSS&&CSS.escape?CSS.escape(p.id):p.id)+'"] .ownwrap');
@@ -486,15 +581,17 @@ function paintChips(){
 }
 function paintUsage(){
   var u=usage();$("u-bar").style.width=Math.min(100,u.n/limit()*100)+"%";$("u-bar").style.background=u.n>=limit()?"#C8431D":"#2E7D5B";
-  $("u-txt").textContent=u.n+" used · limit "+limit()+(SRC==="serp"?" (SerpApi's free plan is 250)":" (Google's free allowance is 1,000)");
+  $("u-txt").textContent=SRC==="an"?(u.n+" searches on your NAS this month · no limit"):(u.n+" used · limit "+limit()+(SRC==="serp"?" (SerpApi's free plan is 250)":" (Google's free allowance is 1,000)"));
 }
 function paintCities(){
   $("city-list").innerHTML=CUSTOM.length?CUSTOM.map(function(c,i){return '<div class="cityrow"><span>'+esc(c.name)+'</span><button class="btn2" data-del="'+i+'">Remove</button></div>';}).join(""):'<p style="margin:0;font-size:14px">No extra cities yet. Tap “+ Other city” on the main screen.</p>';
 }
 function paintSrc(){
   $("src-row").innerHTML=[["google","Google Places"],["serp","SerpApi (250 free)"]].map(function(x){return '<button class="chip'+(SRC===x[0]?" on":"")+'" data-src="'+x[0]+'">'+x[1]+'</button>';}).join("");
+  $("key-wrap").hidden=SRC==="an";
   $("key-lab").textContent=SRC==="serp"?"SerpApi key":"Google Places API key";
-  $("key").value=curKey();
+  $("key").value=SRC==="serp"?SKEY:KEY;
+  $("an-url").value=AN.url||"";$("an-key").value=anKey();
 }
 function openSettings(){paintSrc();paintUsage();paintCities();$("sheet-set").classList.add("open");}
 function save(){sv("anf-state",S);}
@@ -521,6 +618,36 @@ $("b-set").onclick=openSettings;
 $("set-close").onclick=function(){$("sheet-set").classList.remove("open");};
 $("key-save").onclick=function(){var v=$("key").value.trim();if(SRC==="serp"){SKEY=v;sv("anf-skey",v);}else{KEY=v;sv("anf-key",v);}$("sheet-set").classList.remove("open");note(v?"Key saved. You can search now.":"");};
 $("key-clear").onclick=function(){if(SRC==="serp"){SKEY="";sv("anf-skey","");}else{KEY="";sv("anf-key","");}$("key").value="";};
+function anMsg(t,err){var m=$("an-msg");m.hidden=!t;m.className="note"+(err?" err":"");m.textContent=t||"";}
+function anSave(){AN={url:$("an-url").value.trim(),key:$("an-key").value.trim()||AN_DEFAULT};sv("anf-an",AN);anState={at:0,ok:false,base:""};}
+$("an-save").onclick=function(){anSave();anMsg("Saved.");};
+$("an-test").onclick=function(){
+  anSave();if(!anBase()){anMsg("Enter the NAS address or press Find NAS.",true);return;}
+  anMsg("Checking…");
+  anReach(true).then(function(ok){
+    if(!ok){anMsg("The NAS did not answer. Check you are on the office Wi-Fi and the an-search project is running.",true);return;}
+    getJson(anBase()+"/search.json?engine=google&inline_images=0&q=architect+Ludhiana&api_key="+encodeURIComponent(anKey())).then(function(r){
+      if(r.status===401){anMsg("The NAS did not accept this key.",true);return;}
+      var n=((r.json&&r.json.organic_results)||[]).length;
+      anMsg(n?("AN Search works ✓ ("+n+" results)"):"Reached the NAS but no results came back. Try again in a minute.",!n);
+    }).catch(function(){anMsg("The NAS did not answer.",true);});
+  });
+};
+$("an-find").onclick=function(){
+  if(!NATIVE){anMsg("Find NAS works inside the iPhone app.",true);return;}
+  anMsg("Looking for the NAS on this Wi-Fi…");
+  findCb=function(url){
+    if(url){$("an-url").value=url;anSave();anMsg("Found AN Search at "+url+" ✓");}
+    else anMsg("NAS not found on this Wi-Fi. Use the office Wi-Fi, allow 'Local Network' for AN Architects in iPhone Settings, or type the address.",true);
+  };
+  NATIVE.postMessage({t:"findnas"});
+  setTimeout(function(){if(findCb){findCb("");}},20000);
+};
+$("an-copy").onclick=function(){
+  var k=$("an-key").value.trim()||AN_DEFAULT;
+  if(NATIVE)NATIVE.postMessage({t:"copy",text:k});else if(navigator.clipboard)navigator.clipboard.writeText(k);
+  anMsg("Key copied.");
+};
 $("clear-cache").onclick=function(){sv("anf-cache",{});note("Saved results cleared.");$("sheet-set").classList.remove("open");};
 $("city-cancel").onclick=function(){$("sheet-city").classList.remove("open");};
 $("city-add").onclick=function(){
