@@ -29,8 +29,13 @@ targets:
         NSLocalNetworkUsageDescription: "AN Architects looks for your AN Search server (Synology NAS) on the office Wi-Fi."
         LSApplicationQueriesSchemes: [tel, comgooglemaps, maps]
         NSAppTransportSecurity:
+          # only NSAllowsArbitraryLoads: iOS ignores it when NSAllowsLocalNetworking is also present,
+          # which blocked plain-http AN Search (search.audionation.synology.me) and http firm websites
           NSAllowsArbitraryLoads: true
-          NSAllowsLocalNetworking: true
+          NSExceptionDomains:
+            synology.me:
+              NSIncludesSubdomains: true
+              NSExceptionAllowsInsecureHTTPLoads: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.audionation.architectfinder
