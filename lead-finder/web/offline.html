@@ -23,18 +23,18 @@ small{color:var(--ink2);display:block;margin-top:5px;font-size:12px}
 <body>
 <div class="logo"></div>
 <h1>AN Lead Finder</h1>
-<p class="sub">Audio Nation · nayi kothiyon ki leads</p>
+<p class="sub">Audio Nation · home theater &amp; automation leads</p>
 <div class="msg" id="msg"><div class="spin"></div></div>
 <label>Scanner address (NAS)</label>
 <textarea id="servers" rows="3"></textarea>
-<small>Har line mein ek address. Jo pehle chale, wahi use hota hai. Bahar ke liye: lead-finder.audionation.synology.me · office Wi-Fi: http://NAS-IP:8857</small>
+<small>One address per line — the first one that works is used. Outside: lead-finder.audionation.synology.me · office Wi-Fi: http://NAS-IP:8857</small>
 <label>API key</label>
 <input id="key" autocapitalize="off" autocorrect="off">
-<button id="go">Dobara jodiye</button>
+<button id="go">Connect again</button>
 <script>
 const post=m=>window.webkit&&window.webkit.messageHandlers.native.postMessage(m);
 window.__init=(servers,key,msg)=>{document.getElementById('servers').value=servers.join('\n');document.getElementById('key').value=key;
-  document.getElementById('msg').innerHTML=msg.indexOf('jud raha')>=0?'<div class="spin"></div><div style="text-align:center">'+msg+'</div>':msg;};
+  document.getElementById('msg').innerHTML=msg.indexOf('Connecting')>=0?'<div class="spin"></div><div style="text-align:center">'+msg+'</div>':msg;};
 document.getElementById('go').onclick=()=>{post({t:'haptic'});document.getElementById('msg').innerHTML='<div class="spin"></div>';
   post({t:'settings',servers:document.getElementById('servers').value.split('\n'),key:document.getElementById('key').value.trim(),reconnect:true});};
 </script>

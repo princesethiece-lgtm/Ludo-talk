@@ -197,7 +197,7 @@ final class LeadViewController: UIViewController, WKScriptMessageHandler, WKNavi
         let config = WKWebViewConfiguration()
         config.userContentController.add(self, name: "native")
         // tell the page it is running inside the iPhone app
-        let js = "window.LF_NATIVE = true; window.LF_KEY = '\(Store.apiKey)';"
+        let js = "window.LF_NATIVE = true; window.LF_AUTOSEND = true; window.LF_APP_VERSION = '1.1'; window.LF_KEY = '\(Store.apiKey)';"
         config.userContentController.addUserScript(WKUserScript(source: js, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         config.websiteDataStore = .default()
         webView = WKWebView(frame: .zero, configuration: config)
@@ -227,24 +227,30 @@ final class LeadViewController: UIViewController, WKScriptMessageHandler, WKNavi
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { self.refresher.endRefreshing() }
     }
 
+    private var connecting = false
+
     func connect() {
-        showOffline(message: "NAS se jud raha hoon…")
+        // only one connection attempt at a time (two at once cancelled each other and showed the offline screen)
+        guard !connecting else { return }
+        connecting = true
+        showOffline(message: "Connecting to your NAS…")
         Scanner.findServer { [weak self] found in
             DispatchQueue.main.async {
                 guard let self = self else { return }
+                self.connecting = false
                 if let b = found, let url = URL(string: b + "/") {
                     self.base = b
                     self.webView.load(URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData, timeoutInterval: 20))
                 } else {
                     self.base = nil
-                    self.showOffline(message: "Scanner (NAS) se connect nahi ho paya. Internet / office Wi-Fi check kijiye, ya neeche address theek kijiye.")
+                    self.showOffline(message: "Could not reach the scanner (NAS). Check internet / office Wi-Fi, or fix the address below.")
                 }
             }
         }
     }
 
     func reloadData() {
-        guard base != nil else { connect(); return }
+        guard base != nil else { if !connecting { connect() }; return }
         webView.evaluateJavaScript("typeof load==='function'&&load()") { _, _ in }
         // the app itself is open → move "last seen" forward so we don't notify for leads already visible
         Store.lastSeen = Date().timeIntervalSince1970
@@ -307,6 +313,18 @@ final class LeadViewController: UIViewController, WKScriptMessageHandler, WKNavi
             tap.impactOccurred()
         case "ready":
             if let id = pendingLead { openLead(id) }
+        case "autosend":
+            // 👋 — open the forum inside the app and send the poster a private message
+            guard let s = body["url"] as? String, let url = URL(string: s) else { return }
+            let msg = body["msg"] as? String ?? ""
+            UIPasteboard.general.string = msg
+            let vc = AutoSendController(url: url, message: msg, title: body["title"] as? String ?? "Your home theater post",
+                                        leadId: body["id"] as? String ?? "") { [weak self] leadId in
+                self?.webView.evaluateJavaScript("window.__autosent && window.__autosent('\(leadId)')") { _, _ in }
+            }
+            let nav = UINavigationController(rootViewController: vc)
+            nav.modalPresentationStyle = .pageSheet
+            present(nav, animated: true)
         default:
             break
         }
@@ -371,7 +389,13 @@ final class LeadViewController: UIViewController, WKScriptMessageHandler, WKNavi
     }
 
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        if base != nil { base = nil; showOffline(message: "NAS se connection toot gaya. Neeche 'Dobara jodiye' dabaiye.") }
+        // a load that was replaced by a newer one is "cancelled" — that is not a real connection problem
+        if (error as NSError).code == NSURLErrorCancelled { return }
+        if base != nil {
+            base = nil
+            // try again once by itself before showing the offline screen
+            connect()
+        }
     }
 
     // alert() / confirm() / prompt() from the page
