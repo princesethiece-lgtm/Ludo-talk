@@ -347,7 +347,8 @@ function skeleton(){$("meta").hidden=true;$("more").innerHTML="";$("list").inner
 var NAMES=ld("anf-names",{});
 var FIRST=" manish vinay amit rajesh rakesh sandeep sanjay sunil anil ajay vijay vikas vivek rahul rohit mohit nitin naveen neeraj pankaj pawan praveen prashant pradeep deepak dinesh mahesh ramesh suresh ashok anand arun ashish gaurav gagan gurpreet harpreet jaspreet manpreet navdeep sukhdeep balwinder baljit gurmeet gurinder harjinder jatinder davinder kuldeep kulwinder paramjit rajinder surinder tarun varun yogesh kapil lalit manoj mukesh naresh puneet rajiv ravi sachin sumit sumeet sushil vishal vipin vikram abhishek akash ankur anuj arjun atul chetan harish hemant jatin karan kunal lakhan mayank nikhil piyush pranav rishi sahil siddharth tushar uday umesh yash ritesh ranjit rupinder simranjit sukhwinder tejinder amandeep amrit aman angad gurvinder jagdeep jasbir kanwar mandeep inderjeet harsh preet sandeepa priya neha pooja ritu seema sonia shweta swati anita sunita kavita meena renu rekha nidhi nisha poonam komal ruchi shalini tanvi divya isha jyoti kiran monika "
 var NSTOP=/^(architects?|architecture|architectural|associates?|associated|and|design|designs|designers?|studio|studios|consultants?|consultancy|consulting|interiors?|lighting|lights?|engineers?|engineering|builders?|developers?|planners?|planning|group|services?|solutions?|pvt|ltd|limited|llp|co|company|firm|office|the|of|urban|creative|concepts?|space|spaces|works?|workshop|lab|labs|home|homes|house|ludhiana|jalandhar|punjab|india|best|top|new|modern|global|royal|elite|prime|vision|art|arts|craft|decor|furnishings?|constructions?|projects?|realty|infra|structural|civil|landscape|town|city|ar|er|mr|mrs|ms|dr|prof|sir|ji|founder|director|principal|partners?|proprietor|owner|chief|lead|managing|chandigarh|mohali|amritsar|patiala|team|our|meet|about|contact|welcome|name|email|phone|call|gallery|blog|read|more|with|from|hi|hello|us|view|visit|get|free|quote|menu)$/i;
-function titleCaseWords(w){return w.length>=2&&w.length<=3&&w.every(function(x){return /^[A-Z][a-z]{1,}$/.test(x)&&!NSTOP.test(x);});}
+function tcase(x){return /^[A-Z]{2,}$/.test(x)?x.charAt(0)+x.slice(1).toLowerCase():x;}
+function titleCaseWords(w){return w.length>=2&&w.length<=3&&w.every(function(x){return /^[A-Z][a-z]{1,}$/.test(tcase(x))&&!NSTOP.test(x);});}
 function nameFromTitle(t){
   if(!t)return "";
   var parts=t.replace(/\([^)]*\)/g," ").split(/\s*(?:&|\||\/|\sby\s|\sand\s| - | – | — |,|:)\s*/i);
@@ -361,16 +362,30 @@ function nameFromTitle(t){
   return "";
 }
 function nameFromHtml(html){
-  var t=String(html||"").replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ");
-  var N="([A-Z][a-z]+(?:\\s[A-Z][a-z]+){1,2})",R="(?:Co-?Founder|Founder|Principal Architect|Principal|Managing Director|Director|Proprietor|Owner|Chief Architect|Lead Architect)";
-  var res=[new RegExp("\\b(?:Ar|Er)\\.?\\s+"+N,"g"),new RegExp(R+"\\s*(?:&\\s*\\w+\\s*)?[:\\-–|,]?\\s*(?:Ar\\.?\\s*)?"+N,"g"),new RegExp(N+"\\s*[,\\-–|(]\\s*"+R,"g")];
+  html=String(html||"");
+  var m0=/"(?:founder|owner|employee|author|member)"\s*:\s*\[?\s*\{[^}]*?"name"\s*:\s*"([^"]{3,40})"/i.exec(html);
+  if(m0){var w0=m0[1].replace(/^(Ar|Er|Dr|Mr|Mrs|Ms)\.?\s+/i,"").split(/\s+/);if(titleCaseWords(w0))return w0.map(tcase).join(" ");}
+  var t=html.replace(/<(script|style|noscript)[\s\S]*?<\/\1>/gi," ").replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," ");
+  var W="(?:[A-Z][a-z]+|[A-Z]{2,})",N="("+W+"(?:\\s"+W+"){1,2})",RL=["Co-?Founder","Founder","Principal Architect","Principal","Managing Director","Director","Proprietor","Owner","Chief Architect","Lead Architect","Architect","Designer","Partner"],R="(?:"+RL.concat(RL.map(function(x){return x.toUpperCase();})).join("|")+")";
+  var res=[new RegExp("\\b(?:Ar|Er|AR|ER)\\.?\\s+"+N,"g"),
+    new RegExp(R+"\\s*(?:&\\s*\\w+\\s*)?[:\\-–|,]?\\s*(?:(?:Ar|Er|Mr|Mrs|Ms)\\.?\\s*)?"+N,"g"),
+    new RegExp(N+"\\s*[,\\-–|(]\\s*"+R,"g"),
+    new RegExp("\\b(?:Designed|Founded|Led|Headed|Owned|Managed|Run)\\s+by\\s+(?:Ar\\.?\\s*)?"+N,"g"),
+    new RegExp("\\b(?:Mr|Mrs|Ms|Dr)\\.?\\s+"+N,"g")];
   for(var i=0;i<res.length;i++){
     var m;while((m=res[i].exec(t))){
       var w=m[1].split(" ");while(w.length&&NSTOP.test(w[w.length-1]))w.pop();while(w.length&&NSTOP.test(w[0]))w.shift();
-      if(titleCaseWords(w))return w.join(" ");
+      if(titleCaseWords(w))return w.map(tcase).join(" ");
     }
   }
   return "";
+}
+function aboutLinks(html,base){
+  var out=[],re=/href=["']([^"'#]*(?:about|team|contact|profile|principal|founder|people|who-we)[^"'#]*)["']/gi,m;
+  while((m=re.exec(String(html||"")))&&out.length<2){
+    try{var u=new URL(m[1],base).href;if(/^https?:/.test(u)&&out.indexOf(u)<0&&u.replace(/\/$/,"")!==String(base).replace(/\/$/,""))out.push(u);}catch(e){}
+  }
+  return out;
 }
 function ownerOf(p){
   var n=NAMES[p.id]||{};
@@ -385,21 +400,32 @@ var scanId=0;
 function scanNames(){
   if(!NATIVE)return;
   var my=++scanId,now=Date.now();
-  var todo=sorted().slice(0,25).filter(function(p){
+  var todo=sorted().slice(0,40).filter(function(p){
     var n=NAMES[p.id]||{};
-    return p.web&&!SKIPHOST.test(p.web)&&!n.m&&!n.a&&!(n.t&&now-n.t<30*86400000)&&!nameFromTitle(p.name);
+    return p.web&&!SKIPHOST.test(p.web)&&!n.m&&!n.a&&!(n.v===2&&n.t&&now-n.t<30*86400000)&&!nameFromTitle(p.name);
   });
   var i=0;
+  function one(p){
+    return getJson(p.web).then(function(r){
+      var a=r.status===200?nameFromHtml(r.text):"";
+      if(a||r.status!==200)return a;
+      var links=aboutLinks(r.text,p.web),k=0;
+      function nx(){
+        if(k>=links.length)return Promise.resolve("");
+        return getJson(links[k++]).then(function(r2){var b=r2.status===200?nameFromHtml(r2.text):"";return b||nx();}).catch(nx);
+      }
+      return nx();
+    });
+  }
   function next(){
     if(my!==scanId||i>=todo.length)return Promise.resolve();
     var p=todo[i++];
-    return getJson(p.web).then(function(r){
-      var a=r.status===200?nameFromHtml(r.text):"";
-      NAMES[p.id]={a:a,t:Date.now()};sv("anf-names",NAMES);
+    return one(p).then(function(a){
+      NAMES[p.id]={a:a||"",t:Date.now(),v:2};sv("anf-names",NAMES);
       if(a)paintOwner(p);
-    }).catch(function(){NAMES[p.id]={a:"",t:Date.now()};sv("anf-names",NAMES);}).then(next);
+    }).catch(function(){NAMES[p.id]={a:"",t:Date.now(),v:2};sv("anf-names",NAMES);}).then(next);
   }
-  next();next();next();
+  next();next();next();next();
 }
 function paintOwner(p){
   var el=document.querySelector('.card[data-id="'+(window.CSS&&CSS.escape?CSS.escape(p.id):p.id)+'"] .ownwrap');
