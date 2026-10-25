@@ -306,7 +306,7 @@ function render(){
       '<div class="rank'+(i<3&&S.sort==="best"&&hasR?" top":"")+'">'+(i+1)+'</div>'+
       '<h3 class="serif">'+esc(p.name)+'</h3>'+
       (hasR?'<div class="rate"><b>'+p.rating.toFixed(1)+'</b><span class="stars">★★★★★<i style="width:'+pct+'%">★★★★★</i></span><span>'+p.votes.toLocaleString("en-IN")+' reviews</span></div>':'<div class="rate"><span>No reviews yet</span></div>')+
-      '<div class="tags">'+p.cats.map(function(c){return '<span class="tag">'+esc(c)+'</span>';}).join("")+'<span class="tag dist">'+p.dist.toFixed(1)+' km away</span></div>'+
+      '<div class="tags">'+p.cats.map(function(c){return '<span class="tag">'+esc(c)+'</span>';}).join("")+'<span class="tag dist">'+fmtDist(p.dist)+' away</span></div>'+
       (p.addr?'<div class="addr">'+esc(p.addr)+'</div>':'')+
       '<div class="acts">'+
         (p.tel?'<a class="act call" data-tel="'+esc(p.tel)+'" href="#">'+ICON.call+esc(p.phone||"Call")+'</a>':'')+
@@ -317,6 +317,7 @@ function render(){
   var more=CATS.some(function(c){return S.cats[c.id]&&R.tokens[c.id];});
   $("more").innerHTML=a.length&&more?'<button class="more" id="b-more">Load more results</button>':"";
 }
+function fmtDist(d){return d<1?(Math.max(10,Math.round(d*100)*10)+" m"):(d.toFixed(1)+" km");}
 function mapUrl(p){return p.maps||("https://maps.apple.com/?ll="+p.lat+","+p.lng+"&q="+encodeURIComponent(p.name));}
 
 /* ---------- UI wiring ---------- */
