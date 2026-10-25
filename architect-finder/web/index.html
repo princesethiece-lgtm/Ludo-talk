@@ -131,7 +131,7 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   </div>
   </div>
   <div class="lab" style="margin-top:22px">AN Search (Synology) — your NAS</div>
-  <p style="font-size:13px;color:var(--muted);margin:2px 0 8px">Free, no limit, works anywhere — office Wi-Fi or mobile data. The address and key are already filled in: just press Test. After each search it looks up the architects' names on the web and shows them in brackets. Ratings and reviews still come from Google / SerpApi.</p>
+  <p style="font-size:13px;color:var(--muted);margin:2px 0 8px">Free, no limit, works anywhere — office Wi-Fi or mobile data. The address and key are already filled in: just press Test. Choose “AN Search (NAS, free)” under Data source to find architects through your NAS — Google Maps ratings, reviews and phone numbers, no monthly limit. With any data source it also looks up the architects' names and shows them in brackets.</p>
   <input type="text" id="an-url" placeholder="search.audionation.synology.me" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="row" style="margin-top:8px"><button class="btn2" id="an-find">Find NAS</button><button class="btn2" id="an-test">Test</button></div>
   <input type="text" id="an-key" style="margin-top:8px" autocomplete="off" autocapitalize="off" spellcheck="false">
@@ -201,10 +201,10 @@ var S=ld("anf-state",{city:"ludhiana",radius:5,cats:{arch:true,cons:true,int:fal
 S.cats=S.cats||{arch:true,cons:true,int:false};
 var KEY=ld("anf-key","");
 var SRC=ld("anf-src","google"),SKEY=ld("anf-skey","");
-if(SRC==="an")SRC="google";
 var AN_DEFAULT="an-b5a63dd83162778db9a225bb",AN_URL="search.audionation.synology.me",AN=ld("anf-an",{url:AN_URL,key:AN_DEFAULT});
 if(!AN.url||/:8856\b|^(https?:\/\/)?(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)|38\.137\.4\.75/.test(AN.url))AN.url=AN_URL;   // NAS is reached through DSM reverse proxy now
 if(!AN.key)AN.key=AN_DEFAULT;
+if(SRC==="serp"&&!SKEY)SRC="an";   // SerpApi key removed: use the NAS
 function anBase(){var b=String(AN.url||"").trim().replace(/\/+$/,"");return !b?"":/^https?:\/\//i.test(b)?b:"http://"+b;}
 function anKey(){return String(AN.key||"").trim()||AN_DEFAULT;}
 function curKey(){return SRC==="serp"?SKEY:SRC==="an"?(anBase()?anKey():""):KEY;}
@@ -295,18 +295,20 @@ function serpNorm(p,cat){
   return {id:p.place_id||p.data_id||p.title,name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:p.rating||0,votes:p.reviews||0,phone:ph,tel:ph,
     maps:p.place_id?("https://www.google.com/maps/place/?q=place_id:"+p.place_id):("https://www.google.com/maps/search/?api=1&query="+g.latitude+","+g.longitude),web:p.website||"",cats:[cat]};
 }
-function fetchSerp(cat,center,radius,token){
+function fetchSerp(cat,center,radius,token,nas){
   var start=token?+token:0;
-  var url="https://serpapi.com/search.json?engine=google_maps&type=search&q="+encodeURIComponent(cat.q)+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng+","+serpZoom(center.lat,radius)+"z")+"&hl=en&gl=in&start="+start+"&api_key="+encodeURIComponent(SKEY);
+  var base=nas?anBase():"https://serpapi.com",key=nas?anKey():SKEY,who=nas?"AN Search (your NAS)":"SerpApi";
+  var url=base+"/search.json?engine=google_maps&type=search&q="+encodeURIComponent(cat.q)+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng+","+serpZoom(center.lat,radius)+"z")+"&hl=en&gl=in&start="+start+"&api_key="+encodeURIComponent(key);
   return getJson(url).then(function(r){
     bump(1);
     var j=r.json||{};
     if(r.status!==200||j.error){
       var m=(j.error||"").toString();
       if(/Google Maps hasn't returned any results/i.test(m)){R.tokens[cat.id]="";return [];}
-      if(r.status===401||/api_key|Invalid/i.test(m))throw {niceMsg:"SerpApi says the key is not valid. Open Settings and paste it again."};
-      if(r.status===429||/run out|limit/i.test(m))throw {niceMsg:"SerpApi free searches for this month are finished."};
-      throw {niceMsg:"SerpApi problem ("+r.status+"). "+m.slice(0,140)};
+      if(nas&&!r.status)throw {niceMsg:"AN Search (your NAS) is not reachable. Check the internet, then Settings → AN Search → Test."};
+      if(r.status===401||/api_key|Invalid/i.test(m))throw {niceMsg:who+" did not accept the key. Open Settings and check it."};
+      if(!nas&&(r.status===429||/run out|limit/i.test(m)))throw {niceMsg:"SerpApi free searches for this month are finished. Choose 'AN Search (NAS)' in Settings — it has no limit."};
+      throw {niceMsg:who+" problem ("+r.status+"). "+m.slice(0,140)};
     }
     var list=j.local_results||(j.place_results?[j.place_results]:[]);
     R.tokens[cat.id]=list.length>=20?String(start+20):"";
@@ -327,22 +329,6 @@ function nearestCityName(c){
   var best=null,bd=1e9;
   allCities().forEach(function(x){if(x.cur)return;var d=hav(c.lat,c.lng,x.lat,x.lng);if(d<bd){bd=d;best=x;}});
   return best&&bd<40?best.name:"";
-}
-function fetchAn(cat,center,radius){
-  var city=cityById(S.city),cname=city.cur?nearestCityName(center):city.name;
-  var url=anBase()+"/search.json?engine=google_maps&num=60&q="+encodeURIComponent(cat.q+(cname?" "+cname:""))+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng)+"&api_key="+encodeURIComponent(anKey());
-  return getJson(url).then(function(r){
-    bump(1);
-    var j=r.json||{};
-    if(r.status===401)throw {niceMsg:"AN Search did not accept the key. Open Settings → AN Search and press Save."};
-    if(r.status!==200&&!j.local_results)throw {niceMsg:"AN Search (your NAS) is not reachable. Check the internet, then Settings → AN Search → Test."};
-    R.tokens[cat.id]="";
-    return (j.local_results||[]).filter(function(p){return !offTopic(p.title,cat.id);}).map(function(p){
-      var g=p.gps_coordinates||{};if(g.latitude==null)return null;
-      return {id:"an:"+(p.place_id||p.title),name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:0,votes:0,
-        phone:p.phone||"",tel:p.phone||"",maps:"https://www.google.com/maps/search/?api=1&query="+encodeURIComponent((p.title||"")+" "+(p.address||"")),web:p.website||"",cats:[cat.tag]};
-    });
-  });
 }
 function nameFromResults(list,firm){
   // only accept a name that the text clearly ties to THIS firm ("X Y, founder of Firm", "Firm founded by X Y",
@@ -394,7 +380,7 @@ function anNames(my){
 }
 function fetchCat(cat,center,radius,token){
   if(SRC==="serp")return fetchSerp(cat,center,radius,token);
-  if(SRC==="an")return fetchAn(cat,center,radius);
+  if(SRC==="an")return fetchSerp(cat,center,radius,token,true);
   var body={textQuery:cat.q,locationRestriction:{rectangle:bounds(center,radius)},pageSize:20,languageCode:"en",regionCode:"IN"};
   if(token)body.pageToken=token;
   return post(body,MASK).then(function(r){
@@ -589,7 +575,7 @@ function paintCities(){
   $("city-list").innerHTML=CUSTOM.length?CUSTOM.map(function(c,i){return '<div class="cityrow"><span>'+esc(c.name)+'</span><button class="btn2" data-del="'+i+'">Remove</button></div>';}).join(""):'<p style="margin:0;font-size:14px">No extra cities yet. Tap “+ Other city” on the main screen.</p>';
 }
 function paintSrc(){
-  $("src-row").innerHTML=[["google","Google Places"],["serp","SerpApi (250 free)"]].map(function(x){return '<button class="chip'+(SRC===x[0]?" on":"")+'" data-src="'+x[0]+'">'+x[1]+'</button>';}).join("");
+  $("src-row").innerHTML=[["google","Google Places"],["serp","SerpApi (250 free)"],["an","AN Search (NAS, free)"]].map(function(x){return '<button class="chip'+(SRC===x[0]?" on":"")+'" data-src="'+x[0]+'">'+x[1]+'</button>';}).join("");
   $("key-wrap").hidden=SRC==="an";
   $("key-lab").textContent=SRC==="serp"?"SerpApi key":"Google Places API key";
   $("key").value=SRC==="serp"?SKEY:KEY;
@@ -666,14 +652,14 @@ $("city-add").onclick=function(){
   if(!curKey()){$("sheet-city").classList.remove("open");openSettings();return;}
   if(usage().n>=limit()){$("city-msg").hidden=false;$("city-msg").textContent="Monthly free limit reached.";return;}
   $("city-add").disabled=true;
-  var look=SRC==="serp"
-    ?getJson("https://serpapi.com/search.json?engine=google_maps&type=search&q="+encodeURIComponent(name+", India")+"&hl=en&gl=in&api_key="+encodeURIComponent(SKEY)).then(function(r){
+  var look=(SRC==="serp"||SRC==="an")
+    ?getJson((SRC==="an"?anBase():"https://serpapi.com")+"/search.json?engine=google_maps&type=search&q="+encodeURIComponent(name+", India")+"&hl=en&gl=in&api_key="+encodeURIComponent(SRC==="an"?anKey():SKEY)).then(function(r){
         var j=r.json||{},q=(j.place_results||(j.local_results&&j.local_results[0])||null);
         return {status:(r.status===200&&!j.error)?200:(r.status||400),json:{places:q&&q.gps_coordinates?[{displayName:{text:q.title||name},location:{latitude:q.gps_coordinates.latitude,longitude:q.gps_coordinates.longitude}}]:[]},err:j.error};})
     :post({textQuery:name+", India",pageSize:1,languageCode:"en",regionCode:"IN"},"places.displayName,places.location,places.formattedAddress");
   look.then(function(r){
     bump(1);$("city-add").disabled=false;
-    if(r.status!==200){$("city-msg").hidden=false;$("city-msg").className="note err";$("city-msg").textContent=(SRC==="serp"?"SerpApi problem: "+(r.err||r.status):niceError(r));return;}
+    if(r.status!==200){$("city-msg").hidden=false;$("city-msg").className="note err";$("city-msg").textContent=(SRC==="serp"?"SerpApi problem: "+(r.err||r.status):SRC==="an"?"AN Search problem: "+(r.err||r.status):niceError(r));return;}
     var p=r.json&&r.json.places&&r.json.places[0];
     if(!p){$("city-msg").hidden=false;$("city-msg").className="note err";$("city-msg").textContent="Could not find that city.";return;}
     var c={id:"c"+Date.now(),name:(p.displayName&&p.displayName.text)||name,lat:p.location.latitude,lng:p.location.longitude};
@@ -694,7 +680,7 @@ $("name-clear").onclick=function(){
 
 /* ---------- first run ---------- */
 paintChips();paintUsage();render();
-if(!curKey()){
+if(!curKey()&&SRC!=="an"){
   $("notice").innerHTML='<div class="note"><b>One-time setup:</b> this app needs a free Google Places API key to find reviews and phone numbers. Tap the gear at the top right and paste your key.</div>';
 }
 window.ANF={state:S,search:search,get items(){return R.items;},setKey:function(k){KEY=k;sv("anf-key",k);},setSerp:function(k){SKEY=k;SRC="serp";sv("anf-skey",k);sv("anf-src","serp");}};
