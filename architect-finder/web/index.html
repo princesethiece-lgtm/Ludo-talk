@@ -117,7 +117,9 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
 
 <div class="sheet" id="sheet-set"><div class="in">
   <h2 class="serif">Settings</h2>
-  <div class="lab" style="margin-top:14px">Google Places API key</div>
+  <div class="lab" style="margin-top:14px">Data source</div>
+  <div class="row" id="src-row"></div>
+  <div class="lab" id="key-lab" style="margin-top:16px">Google Places API key</div>
   <input type="password" id="key" placeholder="Paste your key here" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="row" style="margin-top:10px">
     <button class="btn2 pri" id="key-save">Save key</button>
@@ -126,7 +128,7 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   <div class="lab" style="margin-top:20px">Free searches this month</div>
   <div class="usage"><i id="u-bar"></i></div>
   <p id="u-txt" style="margin-top:2px"></p>
-  <p style="font-size:13px;color:var(--muted)">The app stops at 900 searches a month so you stay inside Google's free 1,000. Repeating the same search within 12 hours uses saved results and is not counted.</p>
+  <p style="font-size:13px;color:var(--muted)">The app stops before the free allowance ends (900 for Google, 230 for SerpApi) so you are never charged. Repeating the same search within 12 hours uses saved results and is not counted.</p>
   <div class="lab" style="margin-top:18px">Added cities</div>
   <div id="city-list"></div>
   <div class="row" style="margin-top:14px"><button class="btn2" id="clear-cache">Clear saved results</button></div>
@@ -170,10 +172,14 @@ function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 var S=ld("anf-state",{city:"ludhiana",radius:5,cats:{arch:true,cons:true,int:false},sort:"best"});
 S.cats=S.cats||{arch:true,cons:true,int:false};
 var KEY=ld("anf-key","");
+var SRC=ld("anf-src","google"),SKEY=ld("anf-skey","");
+function curKey(){return SRC==="serp"?SKEY:KEY;}
+function limit(){return SRC==="serp"?230:LIMIT;}
+function ukey(){return SRC==="serp"?"anf-usage-s":"anf-usage";}
 var CUSTOM=ld("anf-cities",[]);
 function monthId(){var d=new Date();return d.getFullYear()+"-"+(d.getMonth()+1);}
-function usage(){var u=ld("anf-usage",null);if(!u||u.m!==monthId())u={m:monthId(),n:0};return u;}
-function bump(n){var u=usage();u.n+=n;sv("anf-usage",u);paintUsage();}
+function usage(){var u=ld(ukey(),null);if(!u||u.m!==monthId())u={m:monthId(),n:0};return u;}
+function bump(n){var u=usage();u.n+=n;sv(ukey(),u);paintUsage();}
 var R={items:[],tokens:{},center:null,fromCache:false,cachedAt:0,busy:false};
 
 /* ---------- helpers ---------- */
@@ -202,6 +208,17 @@ function post(body,mask){
     }
   });
 }
+function getJson(url){
+  return new Promise(function(res,rej){
+    if(NATIVE){
+      var id=++pid;pend[id]=function(st,txt){var j=null;try{j=JSON.parse(txt);}catch(e){}res({status:st,json:j,text:txt});};
+      NATIVE.postMessage({t:"fetch",id:id,url:url,method:"GET"});
+      setTimeout(function(){if(pend[id]){delete pend[id];rej(new Error("timeout"));}},25000);
+    }else{
+      fetch(url).then(function(r){return r.text().then(function(t){var j=null;try{j=JSON.parse(t);}catch(e){}res({status:r.status,json:j,text:t});});}).catch(rej);
+    }
+  });
+}
 function whereAmI(){
   return new Promise(function(res,rej){
     if(NATIVE){locCb=function(p,err){p?res(p):rej(new Error(err||"Location unavailable"));};NATIVE.postMessage({t:"loc"});setTimeout(function(){if(locCb){locCb=null;rej(new Error("Location timed out"));}},20000);return;}
@@ -220,7 +237,7 @@ function niceError(r){
 
 /* ---------- search ---------- */
 function bounds(c,r){var dl=r/110.574,dg=r/(111.32*Math.cos(c.lat*Math.PI/180));return {low:{latitude:c.lat-dl,longitude:c.lng-dg},high:{latitude:c.lat+dl,longitude:c.lng+dg}};}
-function cacheKey(c,r,cat){return [c.lat.toFixed(2),c.lng.toFixed(2),r,cat].join("|");}
+function cacheKey(c,r,cat){return [SRC,c.lat.toFixed(2),c.lng.toFixed(2),r,cat].join("|");}
 function wanted(){return CATS.filter(function(c){return S.cats[c.id];});}
 function norm(p,cat){
   if(!p||!p.location||p.businessStatus==="CLOSED_PERMANENTLY")return null;
@@ -235,7 +252,33 @@ function merge(list,center,radius){
   });
   R.items=Object.keys(by).map(function(k){return by[k];});
 }
+function serpZoom(lat,r){var z=Math.round(Math.log(156543*Math.cos(lat*Math.PI/180)/(5*r))/Math.LN2);return Math.max(10,Math.min(16,z));}
+function serpNorm(p,cat){
+  var g=p.gps_coordinates;if(!g)return null;
+  var ph=p.phone||"";
+  return {id:p.place_id||p.data_id||p.title,name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:p.rating||0,votes:p.reviews||0,phone:ph,tel:ph,
+    maps:p.place_id?("https://www.google.com/maps/place/?q=place_id:"+p.place_id):("https://www.google.com/maps/search/?api=1&query="+g.latitude+","+g.longitude),web:p.website||"",cats:[cat]};
+}
+function fetchSerp(cat,center,radius,token){
+  var start=token?+token:0;
+  var url="https://serpapi.com/search.json?engine=google_maps&type=search&q="+encodeURIComponent(cat.q)+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng+","+serpZoom(center.lat,radius)+"z")+"&hl=en&gl=in&start="+start+"&api_key="+encodeURIComponent(SKEY);
+  return getJson(url).then(function(r){
+    bump(1);
+    var j=r.json||{};
+    if(r.status!==200||j.error){
+      var m=(j.error||"").toString();
+      if(/Google Maps hasn't returned any results/i.test(m)){R.tokens[cat.id]="";return [];}
+      if(r.status===401||/api_key|Invalid/i.test(m))throw {niceMsg:"SerpApi says the key is not valid. Open Settings and paste it again."};
+      if(r.status===429||/run out|limit/i.test(m))throw {niceMsg:"SerpApi free searches for this month are finished."};
+      throw {niceMsg:"SerpApi problem ("+r.status+"). "+m.slice(0,140)};
+    }
+    var list=j.local_results||(j.place_results?[j.place_results]:[]);
+    R.tokens[cat.id]=list.length>=20?String(start+20):"";
+    return list.map(function(p){return serpNorm(p,cat.tag);});
+  });
+}
 function fetchCat(cat,center,radius,token){
+  if(SRC==="serp")return fetchSerp(cat,center,radius,token);
   var body={textQuery:cat.q,locationRestriction:{rectangle:bounds(center,radius)},pageSize:20,languageCode:"en",regionCode:"IN"};
   if(token)body.pageToken=token;
   return post(body,MASK).then(function(r){
@@ -247,10 +290,10 @@ function fetchCat(cat,center,radius,token){
 }
 function search(more){
   if(R.busy)return;
-  if(!KEY){openSettings();return;}
+  if(!curKey()){openSettings();return;}
   var cats=wanted();if(!cats.length){note("Choose at least one thing to look for.",true);return;}
   var calls=more?cats.filter(function(c){return R.tokens[c.id];}).length:cats.length;
-  if(usage().n+calls>LIMIT){note("You have used "+usage().n+" of the free searches this month. To avoid charges the app is paused until next month.",true);return;}
+  if(usage().n+calls>limit()){note("You have used "+usage().n+" of the free searches this month. The app is paused until next month so you are never charged.",true);return;}
   R.busy=true;$("go").disabled=true;$("go").textContent="Searching…";note("");
   if(!more){R.items=[];R.tokens={};skeleton();}
   var city=cityById(S.city),radius=S.radius;
@@ -327,17 +370,23 @@ function paintChips(){
   $("cats").innerHTML=CATS.map(function(c){return '<button class="chip'+(S.cats[c.id]?" on":"")+'" data-k="'+c.id+'">'+c.label+'</button>';}).join("");
 }
 function paintUsage(){
-  var u=usage();$("u-bar").style.width=Math.min(100,u.n/10)+"%";$("u-bar").style.background=u.n>=LIMIT?"#C8431D":"#2E7D5B";
-  $("u-txt").textContent=u.n+" used · limit "+LIMIT+" (Google's free allowance is 1,000)";
+  var u=usage();$("u-bar").style.width=Math.min(100,u.n/limit()*100)+"%";$("u-bar").style.background=u.n>=limit()?"#C8431D":"#2E7D5B";
+  $("u-txt").textContent=u.n+" used · limit "+limit()+(SRC==="serp"?" (SerpApi's free plan is 250)":" (Google's free allowance is 1,000)");
 }
 function paintCities(){
   $("city-list").innerHTML=CUSTOM.length?CUSTOM.map(function(c,i){return '<div class="cityrow"><span>'+esc(c.name)+'</span><button class="btn2" data-del="'+i+'">Remove</button></div>';}).join(""):'<p style="margin:0;font-size:14px">No extra cities yet. Tap “+ Other city” on the main screen.</p>';
 }
-function openSettings(){$("key").value=KEY;paintUsage();paintCities();$("sheet-set").classList.add("open");}
+function paintSrc(){
+  $("src-row").innerHTML=[["google","Google Places"],["serp","SerpApi (250 free)"]].map(function(x){return '<button class="chip'+(SRC===x[0]?" on":"")+'" data-src="'+x[0]+'">'+x[1]+'</button>';}).join("");
+  $("key-lab").textContent=SRC==="serp"?"SerpApi key":"Google Places API key";
+  $("key").value=curKey();
+}
+function openSettings(){paintSrc();paintUsage();paintCities();$("sheet-set").classList.add("open");}
 function save(){sv("anf-state",S);}
 
 document.addEventListener("click",function(e){
-  var t=e.target.closest("[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
+  var t=e.target.closest("[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
+  if(t.dataset.src){SRC=t.dataset.src;sv("anf-src",SRC);paintSrc();paintUsage();return;}
   if(t.dataset.tel){e.preventDefault();tick();openUrl("tel:"+t.dataset.tel.replace(/[^\d+]/g,""));return;}
   if(t.dataset.map!=null&&t.dataset.map!==""){e.preventDefault();tick();openUrl(mapUrl(sorted()[+t.dataset.map]));return;}
   if(t.dataset.web){e.preventDefault();openUrl(t.dataset.web);return;}
@@ -354,18 +403,23 @@ document.addEventListener("click",function(e){
 $("go").onclick=function(){tick();search(false);};
 $("b-set").onclick=openSettings;
 $("set-close").onclick=function(){$("sheet-set").classList.remove("open");};
-$("key-save").onclick=function(){KEY=$("key").value.trim();sv("anf-key",KEY);$("sheet-set").classList.remove("open");note(KEY?"Key saved. You can search now.":"");};
-$("key-clear").onclick=function(){KEY="";sv("anf-key","");$("key").value="";};
+$("key-save").onclick=function(){var v=$("key").value.trim();if(SRC==="serp"){SKEY=v;sv("anf-skey",v);}else{KEY=v;sv("anf-key",v);}$("sheet-set").classList.remove("open");note(v?"Key saved. You can search now.":"");};
+$("key-clear").onclick=function(){if(SRC==="serp"){SKEY="";sv("anf-skey","");}else{KEY="";sv("anf-key","");}$("key").value="";};
 $("clear-cache").onclick=function(){sv("anf-cache",{});note("Saved results cleared.");$("sheet-set").classList.remove("open");};
 $("city-cancel").onclick=function(){$("sheet-city").classList.remove("open");};
 $("city-add").onclick=function(){
   var name=$("city-in").value.trim();if(!name)return;
-  if(!KEY){$("sheet-city").classList.remove("open");openSettings();return;}
-  if(usage().n>=LIMIT){$("city-msg").hidden=false;$("city-msg").textContent="Monthly free limit reached.";return;}
+  if(!curKey()){$("sheet-city").classList.remove("open");openSettings();return;}
+  if(usage().n>=limit()){$("city-msg").hidden=false;$("city-msg").textContent="Monthly free limit reached.";return;}
   $("city-add").disabled=true;
-  post({textQuery:name+", India",pageSize:1,languageCode:"en",regionCode:"IN"},"places.displayName,places.location,places.formattedAddress").then(function(r){
+  var look=SRC==="serp"
+    ?getJson("https://serpapi.com/search.json?engine=google_maps&type=search&q="+encodeURIComponent(name+", India")+"&hl=en&gl=in&api_key="+encodeURIComponent(SKEY)).then(function(r){
+        var j=r.json||{},q=(j.place_results||(j.local_results&&j.local_results[0])||null);
+        return {status:(r.status===200&&!j.error)?200:(r.status||400),json:{places:q&&q.gps_coordinates?[{displayName:{text:q.title||name},location:{latitude:q.gps_coordinates.latitude,longitude:q.gps_coordinates.longitude}}]:[]},err:j.error};})
+    :post({textQuery:name+", India",pageSize:1,languageCode:"en",regionCode:"IN"},"places.displayName,places.location,places.formattedAddress");
+  look.then(function(r){
     bump(1);$("city-add").disabled=false;
-    if(r.status!==200){$("city-msg").hidden=false;$("city-msg").className="note err";$("city-msg").textContent=niceError(r);return;}
+    if(r.status!==200){$("city-msg").hidden=false;$("city-msg").className="note err";$("city-msg").textContent=(SRC==="serp"?"SerpApi problem: "+(r.err||r.status):niceError(r));return;}
     var p=r.json&&r.json.places&&r.json.places[0];
     if(!p){$("city-msg").hidden=false;$("city-msg").className="note err";$("city-msg").textContent="Could not find that city.";return;}
     var c={id:"c"+Date.now(),name:(p.displayName&&p.displayName.text)||name,lat:p.location.latitude,lng:p.location.longitude};
@@ -376,10 +430,10 @@ $("city-add").onclick=function(){
 
 /* ---------- first run ---------- */
 paintChips();paintUsage();render();
-if(!KEY){
+if(!curKey()){
   $("notice").innerHTML='<div class="note"><b>One-time setup:</b> this app needs a free Google Places API key to find reviews and phone numbers. Tap the gear at the top right and paste your key.</div>';
 }
-window.ANF={state:S,search:search,get items(){return R.items;},setKey:function(k){KEY=k;sv("anf-key",k);}};
+window.ANF={state:S,search:search,get items(){return R.items;},setKey:function(k){KEY=k;sv("anf-key",k);},setSerp:function(k){SKEY=k;SRC="serp";sv("anf-skey",k);sv("anf-src","serp");}};
 })();
 </script>
 </body>

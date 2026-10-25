@@ -71,6 +71,17 @@ final class FinderViewController: UIViewController, WKScriptMessageHandler, CLLo
     private func runFetch(_ b: [String: Any]) {
         guard let id = b["id"] as? Int, let s = b["url"] as? String, let url = URL(string: s) else { return }
         var req = URLRequest(url: url, timeoutInterval: 20)
+        if (b["method"] as? String) == "GET" {
+            URLSession.shared.dataTask(with: req) { [weak self] data, resp, err in
+                let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                let text = data ?? Data((err?.localizedDescription ?? "").utf8)
+                let b64 = text.base64EncodedString()
+                DispatchQueue.main.async {
+                    self?.webView.evaluateJavaScript("window.__nf(\(id),\(status),'\(b64)')", completionHandler: nil)
+                }
+            }.resume()
+            return
+        }
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue(b["key"] as? String ?? "", forHTTPHeaderField: "X-Goog-Api-Key")
