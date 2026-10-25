@@ -82,6 +82,14 @@ ol.steps{margin:6px 0 8px;padding-left:20px;font-size:14px;color:var(--ink2)}
 ol.steps li{margin:5px 0}
 .btn2{border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:12px;padding:12px 14px;font:700 14px/1 -apple-system,sans-serif}
 .btn2.pri{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.wsearch{position:relative;margin-bottom:10px}
+.wsearch input{padding-left:38px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%236E6A5E' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='M20 20l-4-4'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:12px 50%}
+.sug{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:8;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);overflow:hidden;max-height:62vh;overflow-y:auto}
+.sug button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:10px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);padding:12px 14px;font:600 15px/1.2 -apple-system,sans-serif;text-align:left}
+.sug button:last-child{border-bottom:0}
+.sug button small{font:500 12px/1.2 -apple-system,sans-serif;color:var(--muted);text-align:right}
+.sug .dym{padding:9px 14px 3px;font:700 11px/1 -apple-system,sans-serif;letter-spacing:1.2px;text-transform:uppercase;color:var(--accent2)}
+.whole{font-size:14px;color:var(--ink2);padding:6px 2px 2px;line-height:1.35}
 .cityrow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}
 .usage{height:8px;border-radius:6px;background:var(--chip);overflow:hidden;margin:6px 0}
 .usage i{display:block;height:100%;background:var(--ok)}
@@ -99,9 +107,10 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
 <main>
   <section class="panel">
     <div class="lab">Where</div>
+    <div class="wsearch"><input type="search" id="w-in" placeholder="Search city, state or India…" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="search"><div class="sug" id="w-sug" hidden></div></div>
     <div class="scroll" id="cities"></div>
     <div class="sep"></div>
-    <div class="lab">Radius</div>
+    <div class="lab" id="r-lab">Radius</div>
     <div class="scroll" id="radius"></div>
     <div class="sep"></div>
     <div class="lab">Looking for</div>
@@ -141,7 +150,7 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   <div class="usage"><i id="u-bar"></i></div>
   <p id="u-txt" style="margin-top:2px"></p>
   <p style="font-size:13px;color:var(--muted)">The app stops before the free allowance ends (900 for Google, 230 for SerpApi) so you are never charged. AN Search on your NAS has no limit. Repeating the same search within 12 hours uses saved results and is not counted.</p>
-  <div class="lab" style="margin-top:18px">Added cities</div>
+  <div class="lab" style="margin-top:18px">Added places</div>
   <div id="city-list"></div>
   <div class="row" style="margin-top:14px"><button class="btn2" id="clear-cache">Clear saved results</button></div>
   <div class="row" style="margin-top:18px"><button class="btn2 pri" id="set-close" style="flex:1">Done</button></div>
@@ -280,10 +289,11 @@ function norm(p,cat){
   return {id:p.id,name:(p.displayName&&p.displayName.text)||"Unnamed firm",addr:p.formattedAddress||"",lat:p.location.latitude,lng:p.location.longitude,
     rating:p.rating||0,votes:p.userRatingCount||0,phone:p.nationalPhoneNumber||"",tel:p.internationalPhoneNumber||p.nationalPhoneNumber||"",maps:p.googleMapsUri||"",web:p.websiteUri||"",cats:[cat]};
 }
-function merge(list,center,radius){
+function merge(list,center,radius,where){
   var by={};R.items.forEach(function(x){by[x.id]=x;});
   list.forEach(function(x){
     if(!x)return;x.dist=hav(center.lat,center.lng,x.lat,x.lng);if(x.dist>radius)return;
+    if(where)x.where=where;
     if(by[x.id]){x.cats.forEach(function(c){if(by[x.id].cats.indexOf(c)<0)by[x.id].cats.push(c);});}else{by[x.id]=x;}
   });
   R.items=Object.keys(by).map(function(k){return by[k];});
@@ -295,10 +305,11 @@ function serpNorm(p,cat){
   return {id:p.place_id||p.data_id||p.title,name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:p.rating||0,votes:p.reviews||0,phone:ph,tel:ph,
     maps:p.place_id?("https://www.google.com/maps/place/?q=place_id:"+p.place_id):("https://www.google.com/maps/search/?api=1&query="+g.latitude+","+g.longitude),web:p.website||"",cats:[cat]};
 }
-function fetchSerp(cat,center,radius,token,nas){
+function fetchSerp(cat,center,radius,token,nas,opt){
   var start=token?+token:0;
   var base=nas?anBase():"https://serpapi.com",key=nas?anKey():SKEY,who=nas?"AN Search (your NAS)":"SerpApi";
-  var url=base+"/search.json?engine=google_maps&type=search&q="+encodeURIComponent(cat.q)+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng+","+serpZoom(center.lat,radius)+"z")+"&hl=en&gl=in&start="+start+"&api_key="+encodeURIComponent(key);
+  var q=(opt&&opt.q)||cat.q,z=(opt&&opt.zoom)||serpZoom(center.lat,radius);
+  var url=base+"/search.json?engine=google_maps&type=search&q="+encodeURIComponent(q)+"&ll="+encodeURIComponent("@"+center.lat+","+center.lng+","+z+"z")+"&hl=en&gl=in&start="+start+"&api_key="+encodeURIComponent(key);
   return getJson(url).then(function(r){
     bump(1);
     var j=r.json||{};
@@ -378,10 +389,10 @@ function anNames(my){
     next();next();
   });
 }
-function fetchCat(cat,center,radius,token){
-  if(SRC==="serp")return fetchSerp(cat,center,radius,token);
-  if(SRC==="an")return fetchSerp(cat,center,radius,token,true);
-  var body={textQuery:cat.q,locationRestriction:{rectangle:bounds(center,radius)},pageSize:20,languageCode:"en",regionCode:"IN"};
+function fetchCat(cat,center,radius,token,opt){
+  if(SRC==="serp")return fetchSerp(cat,center,radius,token,false,opt);
+  if(SRC==="an")return fetchSerp(cat,center,radius,token,true,opt);
+  var body={textQuery:(opt&&opt.q)||cat.q,locationRestriction:{rectangle:bounds(center,radius)},pageSize:20,languageCode:"en",regionCode:"IN"};
   if(token)body.pageToken=token;
   return post(body,MASK).then(function(r){
     bump(1);
@@ -394,30 +405,44 @@ function search(more){
   if(R.busy)return;
   if(!curKey()){openSettings();if(SRC==="an")anMsg("Enter the NAS address or press Find NAS.",true);return;}
   var cats=wanted();if(!cats.length){note("Choose at least one thing to look for.",true);return;}
-  var calls=more?cats.filter(function(c){return R.tokens[c.id];}).length:cats.length;
+  var area=cityById(S.city),region=isRegion(area),radius=S.radius;
+  if(more&&R.area)return;
+  var plan=region?regionPlan(area):null;
+  var calls=more?cats.filter(function(c){return R.tokens[c.id];}).length:cats.length*(plan?plan.length:1);
   if(usage().n+calls>limit()){note("You have used "+usage().n+" of the free searches this month. The app is paused until next month so you are never charged.",true);return;}
   R.busy=true;$("go").disabled=true;$("go").textContent="Searching…";note("");
   if(!more){R.items=[];R.tokens={};skeleton();}
-  var city=cityById(S.city),radius=S.radius;
-  var cp=city.cur?whereAmI():Promise.resolve({lat:city.lat,lng:city.lng});
+  var cp=area.cur?whereAmI():Promise.resolve({lat:area.lat,lng:area.lng});
   cp.then(function(center){
     R.center=center;
-    var jobs=cats.map(function(cat){
-      var ck=cacheKey(center,radius,cat.id,cat.q);
+    if(!more)R.area=region?area:null;
+    var parts=plan||[{center:center,radius:radius,where:"",zoom:0}],jobs=[];
+    parts.forEach(function(pl){cats.forEach(function(cat){jobs.push({cat:cat,pl:pl});});});
+    if(!more)R.fromCache=false;
+    return runJobs(jobs,region?3:4,function(jb){
+      var cat=jb.cat,pl=jb.pl,q=pl.where?cat.q+" in "+pl.where:cat.q;
+      var ck=cacheKey(pl.center,pl.radius,cat.id,q);
       if(!more){
         var cache=ld("anf-cache",{}),hit=cache[ck];
-        if(hit&&Date.now()-hit.t<12*3600*1000){R.tokens[cat.id]=hit.tok||"";R.fromCache=true;R.cachedAt=Math.min(R.cachedAt||hit.t,hit.t);return Promise.resolve(hit.items);}
+        if(hit&&Date.now()-hit.t<12*3600*1000){if(!region)R.tokens[cat.id]=hit.tok||"";R.fromCache=true;R.cachedAt=Math.min(R.cachedAt||hit.t,hit.t);return Promise.resolve(hit.items);}
       }else if(!R.tokens[cat.id]){return Promise.resolve([]);}
-      return fetchCat(cat,center,radius,more?R.tokens[cat.id]:"").then(function(items){
-        if(!more){var cache=ld("anf-cache",{}),ks=Object.keys(cache);if(ks.length>40)delete cache[ks[0]];cache[ck]={t:Date.now(),items:items,tok:R.tokens[cat.id]};sv("anf-cache",cache);}
+      return fetchCat(cat,pl.center,pl.radius,more?R.tokens[cat.id]:"",region?{q:q,zoom:pl.zoom}:null).then(function(items){
+        if(!more){var cache=ld("anf-cache",{}),ks=Object.keys(cache);while(ks.length>60){delete cache[ks.shift()];}cache[ck]={t:Date.now(),items:items,tok:region?"":R.tokens[cat.id]};sv("anf-cache",cache);}
         return items;
       });
+    },function(d,n){if(n>2)$("go").textContent="Searching… "+d+"/"+n;}).then(function(res){
+      var ok=0,firstErr=null;
+      res.forEach(function(r,k){
+        if(r.err){firstErr=firstErr||r.err;return;}
+        ok++;var pl=jobs[k].pl;
+        merge(r.ok,pl.center,region?1e9:radius,region&&parts.length>1?pl.where:"");
+      });
+      if(region)R.tokens={};
+      if(!ok&&firstErr)throw firstErr;
     });
-    if(!more)R.fromCache=false;
-    return Promise.all(jobs).then(function(lists){lists.forEach(function(l){merge(l,center,radius);});});
   }).then(function(){
     render();
-    if(!R.items.length)note("No results in this area. Try a bigger radius or another category.");
+    if(!R.items.length)note(region?"No results in "+area.name+". Try another category.":"No results in this area. Try a bigger radius or another category.");
   }).catch(function(e){
     if(!more)R.items=[];render();
     note((e&&e.niceMsg)||(e&&e.message)||"Could not search. Check your internet connection.",true);
@@ -527,6 +552,7 @@ function sorted(){
   if(S.sort==="best")a.sort(function(x,y){return score(y)-score(x)||x.dist-y.dist;});
   else if(S.sort==="reviews")a.sort(function(x,y){return y.votes-x.votes||y.rating-x.rating;});
   else if(S.sort==="rating")a.sort(function(x,y){return y.rating-x.rating||y.votes-x.votes;});
+  else if(R.area)a.sort(function(x,y){return score(y)-score(x);});
   else a.sort(function(x,y){return x.dist-y.dist;});
   return a;
 }
@@ -537,8 +563,8 @@ function render(){
   var a=sorted(),m=$("meta");
   m.hidden=!a.length;
   var city=cityById(S.city);
-  $("count").textContent=a.length+" found within "+S.radius+" km"+(R.fromCache?" · saved results":"");
-  $("sort").innerHTML=SORTS.map(function(s){return '<button data-s="'+s.id+'" class="'+(S.sort===s.id?"on":"")+'">'+s.label+'</button>';}).join("");
+  $("count").textContent=a.length+(R.area?" found in "+R.area.name:" found within "+S.radius+" km")+(R.fromCache?" · saved results":"");
+  $("sort").innerHTML=SORTS.filter(function(s){return !(R.area&&s.id==="near");}).map(function(s){return '<button data-s="'+s.id+'" class="'+(S.sort===s.id?"on":"")+'">'+s.label+'</button>';}).join("");
   $("list").innerHTML=a.length?a.map(function(p,i){
     var pct=Math.max(0,Math.min(100,p.rating/5*100));
     var hasR=p.votes>0;
@@ -546,14 +572,14 @@ function render(){
       '<div class="rank'+(i<3&&S.sort==="best"&&hasR?" top":"")+'">'+(i+1)+'</div>'+
       '<h3 class="serif">'+esc(p.name)+'<span class="ownwrap">'+ownHtml(p)+'</span> <a class="pen" data-edit="'+i+'" href="#" aria-label="Edit name">✎</a></h3>'+
       (hasR?'<div class="rate"><b>'+p.rating.toFixed(1)+'</b><span class="stars">★★★★★<i style="width:'+pct+'%">★★★★★</i></span><span>'+p.votes.toLocaleString("en-IN")+' reviews</span></div>':'<div class="rate"><span>No reviews yet</span></div>')+
-      '<div class="tags">'+p.cats.map(function(c){return '<span class="tag">'+esc(c)+'</span>';}).join("")+'<span class="tag dist">'+fmtDist(p.dist)+' away</span></div>'+
+      '<div class="tags">'+p.cats.map(function(c){return '<span class="tag">'+esc(c)+'</span>';}).join("")+(R.area?(p.where?'<span class="tag dist">'+esc(p.where)+'</span>':''):'<span class="tag dist">'+fmtDist(p.dist)+' away</span>')+'</div>'+
       (p.addr?'<div class="addr">'+esc(p.addr)+'</div>':'')+
       '<div class="acts">'+
         (p.tel?'<a class="act call" data-tel="'+esc(p.tel)+'" href="#">'+ICON.call+esc(p.phone||"Call")+'</a>':'')+
         '<a class="act" data-map="'+i+'" href="#">'+ICON.map+'Map</a>'+
         (p.web?'<a class="act" data-web="'+esc(p.web)+'" href="#">'+ICON.web+'Site</a>':'')+
       '</div></article>';
-  }).join(""):(R.busy?"":'<div class="empty"><svg viewBox="0 0 64 64"><circle cx="28" cy="28" r="18"/><path d="M41 41l16 16"/></svg><div>Pick a place and radius,<br>then tap Search.</div></div>');
+  }).join(""):(R.busy?"":'<div class="empty"><svg viewBox="0 0 64 64"><circle cx="28" cy="28" r="18"/><path d="M41 41l16 16"/></svg><div>Pick a city, a whole state or India,<br>then tap Search.</div></div>');
   var more=CATS.some(function(c){return S.cats[c.id]&&R.tokens[c.id];});
   $("more").innerHTML=a.length&&more?'<button class="more" id="b-more">Load more results</button>':"";
   scanNames();
@@ -561,10 +587,208 @@ function render(){
 function fmtDist(d){return d<1?(Math.max(10,Math.round(d*100)*10)+" m"):(d.toFixed(1)+" km");}
 function mapUrl(p){return p.maps||("https://maps.apple.com/?ll="+p.lat+","+p.lng+"&q="+encodeURIComponent(p.name));}
 
+/* ---------- places: India, states and cities — offline list with spelling correction ---------- */
+var GEO=[["India","","n",22.3511,78.6677,1616],["Andhra Pradesh","","s",15.9241,80.1864,427],["Arunachal Pradesh","","s",28.0938,94.5921,286],["Assam","","s",26.4074,93.2551,314],["Bihar","","s",25.6441,85.9065,249],["Chhattisgarh","","s",21.6637,81.8406,351],["Goa","","s",15.3005,74.0855,58],["Gujarat","","s",22.385,71.7453,323],["Haryana","","s",29.0,76.0,182],["Himachal Pradesh","","s",31.9292,77.1828,161],["Jharkhand","","s",23.456,85.2557,236],["Karnataka","","s",14.9562,75.7897,382],["Kerala","","s",10.3529,76.512,250],["Madhya Pradesh","","s",23.8143,77.5341,446],["Maharashtra","","s",19.567,76.4165,431],["Manipur","","s",24.7209,93.9229,103],["Meghalaya","","s",25.5379,91.2999,150],["Mizoram","","s",23.2146,92.8688,143],["Nagaland","","s",26.1631,94.5885,102],["Odisha","","s",20.5431,84.6897,317],["Punjab","","s",30.9293,75.5005,165],["Rajasthan","","s",26.8106,73.7685,435],["Sikkim","","s",27.6015,88.4546,58],["Tamil Nadu","","s",11.3324,78.6099,304],["Telangana","","s",17.8496,79.1152,226],["Tripura","","s",23.7751,91.7025,88],["Uttar Pradesh","","s",27.1303,80.8597,373],["Uttarakhand","","s",30.0417,79.0897,167],["West Bengal","","s",22.9965,87.6856,315],["Delhi","","u",28.6328,77.2198,27],["Jammu and Kashmir","","u",33.6649,75.163,140],["Ladakh","","u",33.9456,77.6569,190],["Puducherry","","u",10.9156,79.8069,40],["Andaman and Nicobar Islands","","u",12.6112,92.8317,384],["Dadra and Nagar Haveli and Daman and Diu","","u",20.7182,70.9324,122],["Lakshadweep","","u",10.3337,72.9205,252],["Ludhiana","Punjab","c",30.909,75.8516],["Jalandhar","Punjab","c",31.3324,75.5769],["Amritsar","Punjab","c",31.6357,74.8787],["Patiala","Punjab","c",30.3302,76.4008],["Bathinda","Punjab","c",30.2068,74.9464],["Mohali","Punjab","c",30.6909,76.7115],["Hoshiarpur","Punjab","c",31.5329,75.9025],["Pathankot","Punjab","c",32.2692,75.6529],["Moga","Punjab","c",30.8223,75.1731],["Firozpur","Punjab","c",30.9612,74.6092],["Kapurthala","Punjab","c",31.3815,75.3844],["Phagwara","Punjab","c",31.2207,75.7696],["Batala","Punjab","c",31.8193,75.2],["Sangrur","Punjab","c",30.2432,75.8358],["Barnala","Punjab","c",30.3762,75.5436],["Khanna","Punjab","c",30.7006,76.2221],["Rajpura","Punjab","c",30.4777,76.5938],["Zirakpur","Punjab","c",30.6557,76.8201],["Kharar","Punjab","c",30.7488,76.6429],["Abohar","Punjab","c",30.1451,74.1957],["Malerkotla","Punjab","c",30.5331,75.8808],["Fazilka","Punjab","c",30.4032,74.0311],["Faridkot","Punjab","c",30.673,74.7517],["Sri Muktsar Sahib","Punjab","c",30.4692,74.5182],["Mansa","Punjab","c",29.9947,75.4022],["Gurdaspur","Punjab","c",32.0419,75.4002],["Tarn Taran","Punjab","c",31.4519,74.9278],["Rupnagar","Punjab","c",30.9688,76.5261],["Nawanshahr","Punjab","c",31.1257,76.1159],["Fatehgarh Sahib","Punjab","c",30.6467,76.3888],["Mandi Gobindgarh","Punjab","c",30.6518,76.2999],["Sunam","Punjab","c",30.134,75.8063],["Nabha","Punjab","c",30.374,76.1529],["Samrala","Punjab","c",30.8369,76.1914],["Jagraon","Punjab","c",30.8042,75.4754],["Dera Bassi","Punjab","c",30.5882,76.8439],["Anandpur Sahib","Punjab","c",31.2347,76.4973],["Nangal","Punjab","c",31.3837,76.3754],["Mukerian","Punjab","c",31.952,75.614],["Dasuya","Punjab","c",31.8143,75.6573],["Panchkula","Haryana","c",30.6975,76.8551],["Ambala","Haryana","c",30.3844,76.7704],["Yamunanagar","Haryana","c",30.1231,77.2863],["Kurukshetra","Haryana","c",29.9694,76.8483],["Karnal","Haryana","c",29.6803,76.9896],["Panipat","Haryana","c",29.3913,76.9772],["Sonipat","Haryana","c",28.9954,77.0234],["Rohtak","Haryana","c",28.9011,76.5802],["Hisar","Haryana","c",29.1563,75.7292],["Sirsa","Haryana","c",29.5373,75.0378],["Fatehabad","Haryana","c",29.5104,75.4535],["Jind","Haryana","c",29.3152,76.3141],["Kaithal","Haryana","c",29.7997,76.399],["Bhiwani","Haryana","c",28.7932,76.1391],["Charkhi Dadri","Haryana","c",28.592,76.272],["Gurugram","Haryana","c",28.4646,77.0299],["Faridabad","Haryana","c",28.4031,77.3106],["Rewari","Haryana","c",28.1956,76.6165],["Jhajjar","Haryana","c",28.6067,76.6581],["Palwal","Haryana","c",28.1406,77.326],["Nuh","Haryana","c",28.1033,77.0048],["Narnaul","Haryana","c",28.0438,76.1062],["Bahadurgarh","Haryana","c",28.6933,76.9332],["Hansi","Haryana","c",29.1053,75.9634],["Tohana","Haryana","c",29.7108,75.9042],["Mandi Dabwali","Haryana","c",29.9657,74.7029],["Chandigarh","Chandigarh","c",30.7334,76.7797],["New Delhi","Delhi","c",28.6139,77.209],["Dwarka","Delhi","c",28.5778,77.0582],["Rohini","Delhi","c",28.7063,77.1088],["Shimla","Himachal Pradesh","c",31.104,77.1708],["Dharamshala","Himachal Pradesh","c",32.2143,76.3197],["Solan","Himachal Pradesh","c",30.9078,77.1024],["Mandi","Himachal Pradesh","c",31.7084,76.9294],["Kullu","Himachal Pradesh","c",31.9579,77.1089],["Manali","Himachal Pradesh","c",32.2455,77.1873],["Una","Himachal Pradesh","c",31.4671,76.2721],["Hamirpur","Himachal Pradesh","c",31.6849,76.5254],["Bilaspur","Himachal Pradesh","c",31.3381,76.7612],["Kangra","Himachal Pradesh","c",32.1032,76.2724],["Baddi","Himachal Pradesh","c",30.934,76.8063],["Chamba","Himachal Pradesh","c",32.5565,76.125],["Nahan","Himachal Pradesh","c",30.5602,77.2924],["Palampur","Himachal Pradesh","c",32.1095,76.536],["Jammu","Jammu and Kashmir","c",32.7186,74.8581],["Srinagar","Jammu and Kashmir","c",34.0747,74.8204],["Katra","Jammu and Kashmir","c",32.9925,74.9318],["Kathua","Jammu and Kashmir","c",32.3766,75.5243],["Udhampur","Jammu and Kashmir","c",32.922,75.1331],["Anantnag","Jammu and Kashmir","c",33.7369,75.1455],["Leh","Ladakh","c",34.1642,77.5848],["Noida","Uttar Pradesh","c",28.5706,77.3272],["Greater Noida","Uttar Pradesh","c",28.4671,77.5138],["Ghaziabad","Uttar Pradesh","c",28.6712,77.412],["Lucknow","Uttar Pradesh","c",26.8381,80.9346],["Kanpur","Uttar Pradesh","c",26.4609,80.3218],["Agra","Uttar Pradesh","c",27.1753,78.0098],["Varanasi","Uttar Pradesh","c",25.3356,83.0076],["Prayagraj","Uttar Pradesh","c",25.4381,81.8338],["Meerut","Uttar Pradesh","c",28.9963,77.7062],["Saharanpur","Uttar Pradesh","c",29.9637,77.5427],["Bareilly","Uttar Pradesh","c",28.3551,79.4179],["Aligarh","Uttar Pradesh","c",27.8815,78.069],["Moradabad","Uttar Pradesh","c",28.8335,78.7733],["Mathura","Uttar Pradesh","c",27.4956,77.6856],["Vrindavan","Uttar Pradesh","c",27.5754,77.6938],["Gorakhpur","Uttar Pradesh","c",26.76,83.3668],["Jhansi","Uttar Pradesh","c",25.4502,78.58],["Muzaffarnagar","Uttar Pradesh","c",29.4662,77.6962],["Ayodhya","Uttar Pradesh","c",26.7991,82.2052],["Jaipur","Rajasthan","c",26.9155,75.819],["Jodhpur","Rajasthan","c",26.2968,73.0351],["Udaipur","Rajasthan","c",24.5787,73.6863],["Kota","Rajasthan","c",25.1737,75.8574],["Bikaner","Rajasthan","c",28.0159,73.3171],["Ajmer","Rajasthan","c",26.4691,74.639],["Sri Ganganagar","Rajasthan","c",29.9271,73.8762],["Hanumangarh","Rajasthan","c",29.6153,74.2904],["Alwar","Rajasthan","c",27.5646,76.6132],["Bhilwara","Rajasthan","c",25.348,74.636],["Sikar","Rajasthan","c",27.6092,75.1396],["Jaisalmer","Rajasthan","c",26.9117,70.9125],["Pali","Rajasthan","c",25.7682,73.3275],["Bharatpur","Rajasthan","c",27.2154,77.4987],["Chittorgarh","Rajasthan","c",24.8837,74.6244],["Mount Abu","Rajasthan","c",24.5924,72.7082],["Dehradun","Uttarakhand","c",30.3256,78.0437],["Haridwar","Uttarakhand","c",29.9384,78.1453],["Rishikesh","Uttarakhand","c",30.1087,78.2916],["Roorkee","Uttarakhand","c",29.8693,77.8902],["Haldwani","Uttarakhand","c",29.2145,79.5279],["Nainital","Uttarakhand","c",29.3905,79.4609],["Mussoorie","Uttarakhand","c",30.4569,78.0783],["Rudrapur","Uttarakhand","c",28.9707,79.3973],["Mumbai","Maharashtra","c",19.055,72.8692],["Pune","Maharashtra","c",18.5214,73.8545],["Nagpur","Maharashtra","c",21.1498,79.0821],["Nashik","Maharashtra","c",20.0112,73.7902],["Thane","Maharashtra","c",19.1943,72.9702],["Navi Mumbai","Maharashtra","c",19.0308,73.0199],["Chhatrapati Sambhajinagar","Maharashtra","c",19.8773,75.339],["Kolhapur","Maharashtra","c",16.7028,74.2405],["Solapur","Maharashtra","c",17.67,75.9008],["Amravati","Maharashtra","c",20.9316,77.7588],["Ahmedabad","Gujarat","c",23.0215,72.5801],["Surat","Gujarat","c",21.2095,72.8317],["Vadodara","Gujarat","c",22.2973,73.1943],["Rajkot","Gujarat","c",22.3053,70.8028],["Gandhinagar","Gujarat","c",23.2233,72.6492],["Bhavnagar","Gujarat","c",21.7719,72.1416],["Jamnagar","Gujarat","c",22.4732,70.0552],["Anand","Gujarat","c",22.5587,72.9627],["Indore","Madhya Pradesh","c",22.7204,75.8682],["Bhopal","Madhya Pradesh","c",23.2585,77.402],["Gwalior","Madhya Pradesh","c",26.2037,78.1574],["Jabalpur","Madhya Pradesh","c",23.1702,79.9325],["Ujjain","Madhya Pradesh","c",23.1885,75.7717],["Bengaluru","Karnataka","c",12.9768,77.5901],["Mysuru","Karnataka","c",12.3052,76.6554],["Mangaluru","Karnataka","c",12.8698,74.843],["Hubballi","Karnataka","c",15.3518,75.138],["Belagavi","Karnataka","c",15.8573,74.5069],["Chennai","Tamil Nadu","c",13.0801,80.2808],["Coimbatore","Tamil Nadu","c",11.0018,76.9628],["Madurai","Tamil Nadu","c",9.9261,78.1141],["Tiruchirappalli","Tamil Nadu","c",10.8071,78.6881],["Salem","Tamil Nadu","c",11.6552,78.1582],["Hyderabad","Telangana","c",17.3606,78.4741],["Warangal","Telangana","c",17.9821,79.5971],["Visakhapatnam","Andhra Pradesh","c",17.6936,83.2921],["Vijayawada","Andhra Pradesh","c",16.5115,80.616],["Tirupati","Andhra Pradesh","c",13.6316,79.4232],["Guntur","Andhra Pradesh","c",16.2915,80.4542],["Kochi","Kerala","c",9.9679,76.2444],["Thiruvananthapuram","Kerala","c",8.4882,76.9476],["Kozhikode","Kerala","c",11.2451,75.7755],["Thrissur","Kerala","c",10.527,76.2144],["Kolkata","West Bengal","c",22.5726,88.3639],["Siliguri","West Bengal","c",26.7164,88.431],["Durgapur","West Bengal","c",23.535,87.338],["Bhubaneswar","Odisha","c",20.2603,85.8395],["Cuttack","Odisha","c",20.4686,85.8792],["Patna","Bihar","c",25.6093,85.1235],["Gaya","Bihar","c",24.7964,85.008],["Ranchi","Jharkhand","c",23.3701,85.325],["Jamshedpur","Jharkhand","c",22.8015,86.203],["Dhanbad","Jharkhand","c",23.7953,86.431],["Raipur","Chhattisgarh","c",21.2381,81.6337],["Bhilai","Chhattisgarh","c",21.2121,81.3733],["Guwahati","Assam","c",26.1806,91.7539],["Panaji","Goa","c",15.499,73.8282],["Margao","Goa","c",15.2729,73.9583],["Puducherry","Puducherry","c",11.9341,79.8306],["Gangtok","Sikkim","c",27.329,88.6123],["Shillong","Meghalaya","c",25.576,91.8828]];   // [name, state, kind (n country, s state, u union territory, c city), lat, lng, radius km]
+var ALIAS={"bhatinda":"Bathinda","batinda":"Bathinda","sas nagar":"Mohali","sahibzada ajit singh nagar":"Mohali","gurgaon":"Gurugram",
+  "bombay":"Mumbai","bangalore":"Bengaluru","banglore":"Bengaluru","mysore":"Mysuru","mangalore":"Mangaluru","calcutta":"Kolkata",
+  "madras":"Chennai","poona":"Pune","baroda":"Vadodara","trivandrum":"Thiruvananthapuram","cochin":"Kochi","ernakulam":"Kochi",
+  "vizag":"Visakhapatnam","allahabad":"Prayagraj","simla":"Shimla","ropar":"Rupnagar","sbs nagar":"Nawanshahr",
+  "shaheed bhagat singh nagar":"Nawanshahr","nawanshehar":"Nawanshahr","muktsar":"Sri Muktsar Sahib","ganganagar":"Sri Ganganagar",
+  "banaras":"Varanasi","benares":"Varanasi","kashi":"Varanasi","orissa":"Odisha","pondicherry":"Puducherry","pondy":"Puducherry",
+  "hubli":"Hubballi","belgaum":"Belagavi","trichy":"Tiruchirappalli","aurangabad":"Chhatrapati Sambhajinagar","dharmshala":"Dharamshala",
+  "dharamsala":"Dharamshala","ncr":"Delhi","delhi ncr":"Delhi","dilli":"Delhi","j k":"Jammu and Kashmir","jk":"Jammu and Kashmir",
+  "kashmir":"Jammu and Kashmir","hp":"Himachal Pradesh","himachal":"Himachal Pradesh","up":"Uttar Pradesh","mp":"Madhya Pradesh",
+  "ap":"Andhra Pradesh","tn":"Tamil Nadu","wb":"West Bengal","bengal":"West Bengal","chd":"Chandigarh","ldh":"Ludhiana","asr":"Amritsar",
+  "bharat":"India","hindustan":"India","all india":"India","whole india":"India","dabwali":"Mandi Dabwali","gobindgarh":"Mandi Gobindgarh",
+  "ferozepur":"Firozpur","ferozpur":"Firozpur","hissar":"Hisar","yamuna nagar":"Yamunanagar","sonepat":"Sonipat","mewat":"Nuh",
+  "dadri":"Charkhi Dadri","uttaranchal":"Uttarakhand","gauhati":"Guwahati","panjim":"Panaji","madgaon":"Margao",
+  "भारत":"India","इंडिया":"India","पंजाब":"Punjab","ਪੰਜਾਬ":"Punjab","हरियाणा":"Haryana","दिल्ली":"Delhi","राजस्थान":"Rajasthan",
+  "हिमाचल":"Himachal Pradesh","हिमाचल प्रदेश":"Himachal Pradesh","उत्तर प्रदेश":"Uttar Pradesh","उत्तराखंड":"Uttarakhand",
+  "गुजरात":"Gujarat","महाराष्ट्र":"Maharashtra","जम्मू":"Jammu","कश्मीर":"Jammu and Kashmir",
+  "लुधियाना":"Ludhiana","ਲੁਧਿਆਣਾ":"Ludhiana","जालंधर":"Jalandhar","ਜਲੰਧਰ":"Jalandhar","अमृतसर":"Amritsar","ਅੰਮ੍ਰਿਤਸਰ":"Amritsar",
+  "पटियाला":"Patiala","ਪਟਿਆਲਾ":"Patiala","बठिंडा":"Bathinda","ਬਠਿੰਡਾ":"Bathinda","मोहाली":"Mohali","ਮੋਹਾਲੀ":"Mohali",
+  "चंडीगढ़":"Chandigarh","ਚੰਡੀਗੜ੍ਹ":"Chandigarh","होशियारपुर":"Hoshiarpur","पठानकोट":"Pathankot","मोगा":"Moga","फिरोजपुर":"Firozpur",
+  "कपूरथला":"Kapurthala","फगवाड़ा":"Phagwara","संगरूर":"Sangrur","बरनाला":"Barnala","खन्ना":"Khanna","राजपुरा":"Rajpura",
+  "जीरकपुर":"Zirakpur","ज़ीरकपुर":"Zirakpur","खरड़":"Kharar","अबोहर":"Abohar","फाजिल्का":"Fazilka","फरीदकोट":"Faridkot",
+  "मुक्तसर":"Sri Muktsar Sahib","मानसा":"Mansa","गुरदासपुर":"Gurdaspur","तरनतारन":"Tarn Taran","रोपड़":"Rupnagar","नवांशहर":"Nawanshahr",
+  "पंचकूला":"Panchkula","अंबाला":"Ambala","यमुनानगर":"Yamunanagar","कुरुक्षेत्र":"Kurukshetra","करनाल":"Karnal","पानीपत":"Panipat",
+  "सोनीपत":"Sonipat","रोहतक":"Rohtak","हिसार":"Hisar","सिरसा":"Sirsa","फतेहाबाद":"Fatehabad","जींद":"Jind","कैथल":"Kaithal",
+  "भिवानी":"Bhiwani","गुरुग्राम":"Gurugram","गुड़गांव":"Gurugram","फरीदाबाद":"Faridabad","रेवाड़ी":"Rewari","नई दिल्ली":"New Delhi",
+  "शिमला":"Shimla","धर्मशाला":"Dharamshala","सोलन":"Solan","मनाली":"Manali","जयपुर":"Jaipur","जोधपुर":"Jodhpur","उदयपुर":"Udaipur",
+  "श्रीगंगानगर":"Sri Ganganagar","गंगानगर":"Sri Ganganagar","हनुमानगढ़":"Hanumangarh","बीकानेर":"Bikaner","नोएडा":"Noida",
+  "गाजियाबाद":"Ghaziabad","लखनऊ":"Lucknow","आगरा":"Agra","देहरादून":"Dehradun","हरिद्वार":"Haridwar","मुंबई":"Mumbai","पुणे":"Pune",
+  "बेंगलुरु":"Bengaluru","चेन्नई":"Chennai","हैदराबाद":"Hyderabad","कोलकाता":"Kolkata","अहमदाबाद":"Ahmedabad","इंदौर":"Indore","भोपाल":"Bhopal"};
+var NEAR_HOME={"Punjab":1,"Haryana":1,"Chandigarh":1,"Delhi":1,"Himachal Pradesh":1};
+var METROS=["New Delhi","Mumbai","Bengaluru","Hyderabad","Chennai","Kolkata","Pune","Ahmedabad","Chandigarh","Jaipur"];
+function pnorm(s){
+  s=String(s||"").normalize("NFC").toLowerCase();
+  try{s=s.replace(/[^\p{L}\p{M}\p{N}]+/gu," ");}catch(e){s=s.replace(/[^a-z0-9ऀ-੿]+/g," ");}
+  return s.replace(/\s+/g," ").trim();
+}
+function phon(s){   // spelling-tolerant key: ludhiyana = ludhiana, bhatinda = bathinda, jallandhar = jalandhar
+  s=s.replace(/[^a-z]/g,"");
+  return s.replace(/ph/g,"f").replace(/sh/g,"s").replace(/([bcdgjkptr])h/g,"$1").replace(/ck/g,"k").replace(/q/g,"k").replace(/c/g,"k")
+    .replace(/w/g,"v").replace(/z/g,"j").replace(/x/g,"ks").replace(/y/g,"i").replace(/ee/g,"i").replace(/oo/g,"u").replace(/(.)\1+/g,"$1");
+}
+function osa(a,b){   // edit distance that also counts swapped neighbours as one typo
+  var m=a.length,n=b.length,d=[],i,j;
+  for(i=0;i<=m;i++){d[i]=[i];}
+  for(j=0;j<=n;j++){d[0][j]=j;}
+  for(i=1;i<=m;i++)for(j=1;j<=n;j++){
+    var c=a[i-1]===b[j-1]?0:1;
+    d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+c);
+    if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);
+  }
+  return d[m][n];
+}
+function sim(q,k){
+  if(!q||!k)return 0;
+  if(q===k)return 1;
+  if(k.indexOf(q)===0)return q.length<2?0.5:0.9+0.08*q.length/k.length;
+  var full=1-osa(q,k)/Math.max(q.length,k.length);
+  var pre=q.length>=3&&q.length<k.length?(1-osa(q,k.slice(0,q.length))/q.length)*0.88:0;
+  return Math.max(full,pre);
+}
+var GIDX=GEO.map(function(g,i){var n=pnorm(g[0]);return {i:i,key:phon(n),words:n.split(" ").length>1?n.split(" ").map(phon):[]};});
+var AIDX=Object.keys(ALIAS).map(function(k){
+  var n=pnorm(k),t=ALIAS[k],gi=-1;
+  GEO.some(function(g,i){if(g[0]===t){gi=i;return true;}return false;});
+  return {n:n,latin:/[a-z]/.test(n),key:phon(n),i:gi};
+}).filter(function(a){return a.i>=0;});
+function geoPlace(i){var g=GEO[i];return {id:"g:"+g[0]+(g[1]?"|"+g[1]:""),name:g[0],st:g[1],kind:g[2],lat:g[3],lng:g[4],r:g[5]||0};}
+function isRegion(c){return !!c&&(c.kind==="s"||c.kind==="u"||c.kind==="n");}
+function findPlaces(text){
+  var nq=pnorm(text);if(!nq)return [];
+  var best={};
+  function add(key,s,i){if(!best[key]||best[key].s<s)best[key]={s:s,i:i};}
+  if(/[a-z]/.test(nq)){
+    var q=phon(nq);
+    GIDX.forEach(function(g){
+      var s=sim(q,g.key);g.words.forEach(function(w){s=Math.max(s,sim(q,w)*0.95);});
+      if(s>=0.55)add(g.i,s,g.i);
+    });
+    AIDX.forEach(function(a){if(a.latin){var s=sim(q,a.key);if(s>=0.55)add(a.i,s*0.99,a.i);}});
+  }else{
+    AIDX.forEach(function(a){if(a.latin)return;if(a.n===nq)add(a.i,1,a.i);else if(a.n.indexOf(nq)===0)add(a.i,0.93,a.i);});
+  }
+  var out=Object.keys(best).map(function(k){
+    var b=best[k],g=GEO[b.i],bonus=(g[2]!=="c"?0.02:0)+(NEAR_HOME[g[1]]||NEAR_HOME[g[0]]?0.03:0);
+    return {p:geoPlace(b.i),s:b.s,rank:b.s+bonus,i:b.i};
+  });
+  CUSTOM.forEach(function(c){   // places found earlier on the map that are not in the list
+    if(c.id.indexOf("g:")===0||!/[a-z]/.test(nq))return;
+    var s=sim(phon(nq),phon(pnorm(c.name)));
+    if(s>=0.6&&!out.some(function(o){return pnorm(o.p.name)===pnorm(c.name);}))out.push({p:c,s:s,rank:s,i:999});
+  });
+  out.sort(function(a,b){return b.rank-a.rank||a.i-b.i;});
+  return out.slice(0,6);
+}
+function exactPlace(name){var f=findPlaces(name)[0];return f&&f.s>=0.97?f.p:null;}
+function placeSub(p){
+  return p.kind==="n"?"Country · best across India":p.kind==="s"?"State · whole state":p.kind==="u"?"Union territory · whole area":
+    ("City"+(p.st?" · "+p.st:""));
+}
+function placeLabel(c){return (c.cur?"📍 ":c.kind==="n"?"🇮🇳 ":isRegion(c)?"🗺️ ":"")+c.name;}
+function regionZoom(lat,r){return Math.max(4,Math.min(12,Math.round(Math.log(156543*Math.cos(lat*Math.PI/180)*1024/(2000*Math.max(r,5)))/Math.LN2)));}
+/* how a whole state / India is searched: the best firms of its main cities, ranked together */
+function regionPlan(area){
+  var many=SRC==="an"?6:3,list=[];
+  if(area.kind==="n"){
+    METROS.slice(0,SRC==="an"?8:3).forEach(function(n){GEO.some(function(g){if(g[0]===n&&g[2]==="c"){list.push(g);return true;}return false;});});
+  }else if(area.r>60){
+    list=GEO.filter(function(g){return g[2]==="c"&&g[1]===area.name;}).slice(0,many);
+  }
+  if(list.length>=2)return list.map(function(g){return {center:{lat:g[3],lng:g[4]},radius:15,where:g[0],zoom:0};});
+  return [{center:{lat:area.lat,lng:area.lng},radius:Math.max(area.r||30,10),where:area.name,zoom:regionZoom(area.lat,area.r||30)}];
+}
+function regionText(area){
+  var pl=regionPlan(area);
+  if(pl.length>1)return "Whole of "+area.name+" — best rated across "+pl.slice(0,3).map(function(x){return x.where;}).join(", ")+(pl.length>3?" and more":"");
+  return "Whole of "+area.name+" — best rated first";
+}
+/* old saved places get their type (state / city) from the list */
+(function(){
+  var changed=false;
+  CUSTOM.forEach(function(c){
+    if(c.kind)return;
+    var p=exactPlace(c.name);
+    if(p){c.kind=p.kind;c.st=p.st;c.r=p.r;c.lat=p.lat;c.lng=p.lng;}else c.kind="c";
+    changed=true;
+  });
+  if(changed)sv("anf-cities",CUSTOM);
+})();
+/* the search box under "Where" */
+var SUG=[],QUICK=["India","Punjab","Haryana","Delhi","Chandigarh","Amritsar","Bathinda","Mohali"];
+function closeSug(){$("w-sug").hidden=true;SUG=[];}
+function showSug(){
+  var t=$("w-in").value.trim(),h="";
+  if(!t){
+    SUG=QUICK.map(function(n){var i=-1;GEO.some(function(g,k){if(g[0]===n){i=k;return true;}return false;});return {p:geoPlace(i),s:1};});
+    h='<div class="dym" style="color:var(--muted)">Quick picks</div>';
+  }else{
+    SUG=findPlaces(t);
+    if(SUG.length&&SUG[0].s<0.9)h='<div class="dym">Did you mean…</div>';
+  }
+  h+=SUG.map(function(o,i){return '<button data-sug="'+i+'"><span>'+esc(placeLabel(o.p))+'</span><small>'+esc(o.p.id.indexOf("g:")===0?placeSub(o.p):"Place you added")+'</small></button>';}).join("");
+  if(t.length>=3&&(!SUG.length||SUG[0].s<0.97))h+='<button data-sugmap="1"><span>🔎 Find “'+esc(t)+'” on the map</span><small>any town or area</small></button>';
+  $("w-sug").innerHTML=h;$("w-sug").hidden=!h;
+}
+function choosePlace(p){
+  var ex=allCities().filter(function(c){return c.id===p.id||(pnorm(c.name)===pnorm(p.name)&&(c.kind||"c")===(p.kind||"c"));})[0];
+  if(!ex){
+    CUSTOM.unshift(p);
+    while(CUSTOM.length>12){var k=CUSTOM.length-1;if(CUSTOM[k].id===S.city)k--;CUSTOM.splice(k,1);}
+    sv("anf-cities",CUSTOM);ex=p;
+  }
+  S.city=ex.id;save();paintChips();closeSug();$("w-in").value="";$("w-in").blur();
+  setTimeout(function(){var on=document.querySelector('#cities .chip.on');if(on&&on.scrollIntoView)on.scrollIntoView({block:"nearest",inline:"center"});},50);
+  search(false);
+}
+function geocodeOnline(name){   // a town that is not in the list: ask the current data source where it is
+  if(!curKey())return Promise.reject({niceMsg:"Open Settings and choose a data source first."});
+  var look=(SRC==="serp"||SRC==="an")
+    ?getJson((SRC==="an"?anBase():"https://serpapi.com")+"/search.json?engine=google_maps&type=search&q="+encodeURIComponent(name+", India")+"&hl=en&gl=in&api_key="+encodeURIComponent(SRC==="an"?anKey():SKEY)).then(function(r){
+        var j=r.json||{},q=(j.place_results||(j.local_results&&j.local_results[0])||null);
+        return {status:(r.status===200&&!j.error)?200:(r.status||400),json:{places:q&&q.gps_coordinates?[{displayName:{text:q.title||name},location:{latitude:q.gps_coordinates.latitude,longitude:q.gps_coordinates.longitude}}]:[]},err:j.error};})
+    :post({textQuery:name+", India",pageSize:1,languageCode:"en",regionCode:"IN"},"places.displayName,places.location,places.formattedAddress");
+  return look.then(function(r){
+    bump(1);
+    if(r.status!==200)throw {niceMsg:(SRC==="serp"?"SerpApi problem: "+(r.err||r.status):SRC==="an"?"AN Search problem: "+(r.err||r.status):niceError(r))};
+    var p=r.json&&r.json.places&&r.json.places[0];
+    if(!p)throw {niceMsg:"Could not find “"+name+"” on the map."};
+    return {id:"c"+Date.now(),name:(p.displayName&&p.displayName.text)||name,lat:p.location.latitude,lng:p.location.longitude,kind:"c"};
+  },function(){throw {niceMsg:"No internet connection."};});
+}
+function pickFromBox(useMap){
+  var t=$("w-in").value.trim();if(!t)return;
+  if(!useMap&&SUG.length&&SUG[0].s>=0.6){choosePlace(SUG[0].p);return;}
+  closeSug();note("Looking for “"+t+"”…");
+  geocodeOnline(t).then(function(p){note("");choosePlace(p);},function(e){note((e&&e.niceMsg)||"Could not find that place.",true);});
+}
+$("w-in").addEventListener("input",showSug);
+$("w-in").addEventListener("focus",showSug);
+$("w-in").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();pickFromBox(false);}else if(e.key==="Escape"){closeSug();}});
+function runJobs(jobs,max,fn,prog){   // a few at a time; a failed city does not stop the others
+  return new Promise(function(res){
+    var i=0,done=0,active=0,out=new Array(jobs.length);
+    if(!jobs.length)return res(out);
+    function next(){
+      while(active<max&&i<jobs.length){
+        (function(k){active++;
+          fn(jobs[k]).then(function(v){out[k]={ok:v};},function(e){out[k]={err:e};}).then(function(){active--;done++;if(prog)prog(done,jobs.length);if(done===jobs.length)res(out);else next();});
+        })(i++);
+      }
+    }
+    next();
+  });
+}
+
 /* ---------- UI wiring ---------- */
 function paintChips(){
-  $("cities").innerHTML=allCities().map(function(c){return '<button class="chip'+(S.city===c.id?" on":"")+'" data-c="'+c.id+'">'+(c.cur?"📍 ":"")+esc(c.name)+'</button>';}).join("")+'<button class="chip" id="c-add">+ Other city</button>';
-  $("radius").innerHTML=RADII.map(function(r){return '<button class="chip km'+(S.radius===r?" on":"")+'" data-r="'+r+'">'+r+' km</button>';}).join("");
+  $("cities").innerHTML=allCities().map(function(c){return '<button class="chip'+(S.city===c.id?" on":"")+'" data-c="'+esc(c.id)+'">'+esc(placeLabel(c))+'</button>';}).join("");
+  var area=cityById(S.city);
+  $("r-lab").textContent=isRegion(area)?"Area":"Radius";
+  $("radius").innerHTML=isRegion(area)?'<div class="whole">'+esc(regionText(area))+'</div>':RADII.map(function(r){return '<button class="chip km'+(S.radius===r?" on":"")+'" data-r="'+r+'">'+r+' km</button>';}).join("");
   $("cats").innerHTML=CATS.map(function(c){return '<button class="chip'+(S.cats[c.id]?" on":"")+'" data-k="'+c.id+'">'+c.label+'</button>';}).join("");
 }
 function paintUsage(){
@@ -572,7 +796,7 @@ function paintUsage(){
   $("u-txt").textContent=SRC==="an"?(u.n+" searches on your NAS this month · no limit"):(u.n+" used · limit "+limit()+(SRC==="serp"?" (SerpApi's free plan is 250)":" (Google's free allowance is 1,000)"));
 }
 function paintCities(){
-  $("city-list").innerHTML=CUSTOM.length?CUSTOM.map(function(c,i){return '<div class="cityrow"><span>'+esc(c.name)+'</span><button class="btn2" data-del="'+i+'">Remove</button></div>';}).join(""):'<p style="margin:0;font-size:14px">No extra cities yet. Tap “+ Other city” on the main screen.</p>';
+  $("city-list").innerHTML=CUSTOM.length?CUSTOM.map(function(c,i){return '<div class="cityrow"><span>'+esc(placeLabel(c))+'</span><button class="btn2" data-del="'+i+'">Remove</button></div>';}).join(""):'<p style="margin:0;font-size:14px">No extra places yet. Use the search box under “Where” on the main screen.</p>';
 }
 function paintSrc(){
   $("src-row").innerHTML=[["google","Google Places"],["serp","SerpApi (250 free)"],["an","AN Search (NAS, free)"]].map(function(x){return '<button class="chip'+(SRC===x[0]?" on":"")+'" data-src="'+x[0]+'">'+x[1]+'</button>';}).join("");
@@ -585,7 +809,10 @@ function openSettings(){paintSrc();paintUsage();paintCities();$("sheet-set").cla
 function save(){sv("anf-state",S);}
 
 document.addEventListener("click",function(e){
-  var t=e.target.closest("[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
+  if(!e.target.closest(".wsearch"))closeSug();
+  var t=e.target.closest("[data-sug],[data-sugmap],[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
+  if(t.dataset.sug!=null&&t.dataset.sug!==""){e.preventDefault();tick();var o=SUG[+t.dataset.sug];if(o)choosePlace(o.p);return;}
+  if(t.dataset.sugmap){e.preventDefault();tick();pickFromBox(true);return;}
   if(t.dataset.edit!=null&&t.dataset.edit!==""){e.preventDefault();tick();openName(sorted()[+t.dataset.edit]);return;}
   if(t.dataset.src){SRC=t.dataset.src;sv("anf-src",SRC);paintSrc();paintUsage();return;}
   if(t.dataset.tel){e.preventDefault();tick();openUrl("tel:"+t.dataset.tel.replace(/[^\d+]/g,""));return;}
