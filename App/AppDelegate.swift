@@ -19,6 +19,14 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         self.window = window
         return true
     }
+
+    // Reopening the app (from the app switcher, or after a call/notification)
+    // leaves the audio session inactive even though the page's own AudioContext
+    // thinks it is running, which is why sound would stay silent until a fresh
+    // launch. Reactivating it here brings sound back as soon as the game is visible again.
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
 }
 
 /// Hosts the Ludo game (web/index.html, bundled inside the app) and turns
