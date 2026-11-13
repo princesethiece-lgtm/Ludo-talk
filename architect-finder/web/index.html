@@ -6,6 +6,13 @@
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#10233F">
 <title>AN Architects</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AN Architects">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 :root{
   --ink:#10233F; --ink2:#2A3F5E; --paper:#F4EFE4; --card:#FFFDF8; --line:#E1D9C6; --muted:#6E6A5E;
@@ -96,6 +103,15 @@ ol.steps li{margin:5px 0}
 .rad input[type=range]{flex:1;min-width:0;height:34px;accent-color:var(--accent);margin:0}
 .rbtn{flex:0 0 auto;width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--chip);color:var(--ink);font:700 20px/1 -apple-system,sans-serif}
 .rad output{flex:0 0 auto;min-width:64px;text-align:right;font:700 17px/1 -apple-system,sans-serif;font-variant-numeric:tabular-nums;color:var(--ink)}
+.catbtn{width:100%;display:flex;align-items:center;gap:10px;text-align:left;border:1px solid var(--line);background:var(--chip);color:var(--ink);border-radius:14px;padding:12px 14px;font:600 15px/1.3 -apple-system,sans-serif}
+.catbtn span{flex:1;min-width:0}
+.catbtn b{font-size:13px;color:var(--muted);font-weight:600}
+.catrow{width:100%;display:flex;align-items:center;gap:12px;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);padding:13px 4px;font:600 16px/1.2 -apple-system,sans-serif;text-align:left}
+.catrow .ci{font-size:22px;width:30px;text-align:center}
+.catrow .cl{flex:1}
+.catrow .ck{width:26px;height:26px;border-radius:8px;border:2px solid var(--line);display:grid;place-items:center;font-size:15px;color:transparent}
+.catrow.on .ck{background:var(--chipOn);border-color:var(--chipOn);color:var(--chipOnTx)}
+#other-in{margin:10px 0 4px}
 .whole{font-size:14px;color:var(--ink2);padding:6px 2px 2px;line-height:1.35}
 .cityrow{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px}
 .usage{height:8px;border-radius:6px;background:var(--chip);overflow:hidden;margin:6px 0}
@@ -105,7 +121,7 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
 </head>
 <body>
 <header>
-  <h1 class="serif"><small>Architects &amp; consultants</small>Find nearby</h1>
+  <h1 class="serif"><small>AN Architects · nearby</small>Find nearby</h1>
   <button class="icon-btn" id="b-set" aria-label="Settings">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
   </button>
@@ -121,9 +137,9 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
     <div id="radius"></div>
     <div class="sep"></div>
     <div class="lab">Looking for</div>
-    <div class="row" id="cats"></div>
+    <button class="catbtn" id="cat-btn" type="button"></button>
     <div class="sep"></div>
-    <div class="lab">Architect's name <span style="text-transform:none;letter-spacing:0;font-weight:500">— optional, when you know the name but not the firm</span></div>
+    <div class="lab">Name <span style="text-transform:none;letter-spacing:0;font-weight:500">— optional: an architect's name when you don't know the firm, or a place's name</span></div>
     <div class="wsearch nsearch"><input type="search" id="n-in" placeholder="e.g. Balwinder" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="search"></div>
     <button class="go" id="go">Search</button>
   </section>
@@ -152,7 +168,7 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   <div class="lab" style="margin-top:22px">AN Search (Synology) — your NAS</div>
   <p style="font-size:13px;color:var(--muted);margin:2px 0 8px">Free, no limit, works anywhere — office Wi-Fi or mobile data. The address and key are already filled in: just press Test. Choose “AN Search (NAS, free)” under Data source to find architects through your NAS — Google Maps ratings, reviews and phone numbers, no monthly limit. With any data source it also looks up the architects' names and shows them in brackets.</p>
   <input type="text" id="an-url" placeholder="search.audionation.synology.me" autocomplete="off" autocapitalize="off" spellcheck="false">
-  <div class="row" style="margin-top:8px"><button class="btn2" id="an-find">Find NAS</button><button class="btn2" id="an-test">Test</button></div>
+  <div class="row" style="margin-top:8px" id="an-addr-row"><button class="btn2" id="an-find">Find NAS</button><button class="btn2" id="an-test">Test</button></div>
   <input type="text" id="an-key" style="margin-top:8px" autocomplete="off" autocapitalize="off" spellcheck="false">
   <div class="row" style="margin-top:8px"><button class="btn2" id="an-copy">Copy key</button><button class="btn2 pri" id="an-save">Save</button></div>
   <div id="an-msg" class="note" hidden></div>
@@ -164,7 +180,15 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   <div id="city-list"></div>
   <div class="row" style="margin-top:14px"><button class="btn2" id="clear-cache">Clear saved results</button></div>
   <div class="row" style="margin-top:18px"><button class="btn2 pri" id="set-close" style="flex:1">Done</button></div>
-  <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px">AN Architects · version 1.7</p>
+  <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px" id="ver">AN Architects · version 1.8</p>
+</div></div>
+
+<div class="sheet" id="sheet-cat"><div class="in">
+  <h2 class="serif">Looking for</h2>
+  <p style="font-size:14px;color:var(--muted);margin:2px 0 6px">Tick one or more, then Done.</p>
+  <div id="cat-list"></div>
+  <input type="search" id="other-in" placeholder="Others: e.g. salon, home theater" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="done">
+  <div class="row" style="margin-top:14px"><button class="btn2 pri" id="cat-done" style="flex:1">Done</button></div>
 </div></div>
 
 <div class="sheet" id="sheet-city"><div class="in">
@@ -194,6 +218,8 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
 "use strict";
 var $=function(id){return document.getElementById(id);};
 var NATIVE=(window.webkit&&window.webkit.messageHandlers&&window.webkit.messageHandlers.native)||null;
+/* web version: the page itself is served by AN Search on the NAS (https://arch.audionation.synology.me) */
+var WEB=!NATIVE,SAME=WEB&&/^https?:$/.test(location.protocol)&&/(^|\.)audionation\.synology\.me$/i.test(location.hostname);
 var LIMIT=900;
 var BUILTIN=[
   {id:"cur",name:"Current location",cur:true},
@@ -207,15 +233,21 @@ function kmToPos(k){return Math.round(1000*Math.log(clampR(k)/RMIN)/Math.log(RMA
 function posToKm(p){return clampR(RMIN*Math.pow(RMAX/RMIN,p/1000));}
 function fmtKm(k){return r1(k).toFixed(1).replace(/\.0$/,"")+" km";}
 var CATS=[
-  {id:"arch",label:"Architects",q:"architect",tag:"Architect"},
-  {id:"cons",label:"Lighting consultants",q:"lighting consultant",tag:"Lighting consultant"},
-  {id:"int",label:"Interior designers",q:"interior designer",tag:"Interior"}
+  {id:"arch",label:"Architects",ic:"🏛️",q:"architect",tag:"Architect",pro:1},
+  {id:"cons",label:"Consultants (lighting)",ic:"💡",q:"lighting consultant",tag:"Lighting consultant",pro:1},
+  {id:"int",label:"Interior designers",ic:"🛋️",q:"interior designer",tag:"Interior",pro:1},
+  {id:"petrol",label:"Petrol pumps",ic:"⛽",q:"petrol pump",tag:"Petrol pump"},
+  {id:"rest",label:"Restaurants",ic:"🍽️",q:"restaurant",tag:"Restaurant"},
+  {id:"hotel",label:"Hotels",ic:"🏨",q:"hotel",tag:"Hotel"},
+  {id:"other",label:"Others",ic:"🔎",q:"",tag:"",other:1}
 ];
+var PRO_TAGS={"Architect":1,"Lighting consultant":1,"Interior":1};
+function isPro(p){return (p&&p.cats||[]).some(function(t){return PRO_TAGS[t];});}
 /* Google's text search is fuzzy: a query for "lighting consultant" or "interior designer"
    still turns up plain architecture firms. When a category other than Architects is
    searched on its own, drop anything clearly named as an architecture firm so results
    stay on-topic; a firm still shows under "All" if it also matches the Architects query. */
-function offTopic(name,catId){return catId!=="arch"&&/\barchitects?\b/i.test(name||"");}
+function offTopic(name,catId){return (catId==="cons"||catId==="int")&&/\barchitects?\b/i.test(name||"");}
 var SORTS=[{id:"best",label:"Best"},{id:"reviews",label:"Reviews"},{id:"rating",label:"Rating"},{id:"near",label:"Nearest"}];
 var MASK="places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.nationalPhoneNumber,places.internationalPhoneNumber,places.googleMapsUri,places.websiteUri,places.businessStatus,nextPageToken";
 
@@ -225,10 +257,11 @@ function sv(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 var S=ld("anf-state",{city:"ludhiana",radius:5,cats:{arch:true,cons:true,int:false},sort:"best"});
 S.cats=S.cats||{arch:true,cons:true,int:false};
 var KEY=ld("anf-key","");
-var SRC=ld("anf-src","google"),SKEY=ld("anf-skey","");
+var SRC=ld("anf-src",WEB?"an":"google"),SKEY=ld("anf-skey","");
 var AN_DEFAULT="an-b5a63dd83162778db9a225bb",AN_URL="search.audionation.synology.me",AN=ld("anf-an",{url:AN_URL,key:AN_DEFAULT});
 if(!AN.url||/:8856\b|^(https?:\/\/)?(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)|38\.137\.4\.75/.test(AN.url))AN.url=AN_URL;   // NAS is reached through DSM reverse proxy now
 if(!AN.key)AN.key=AN_DEFAULT;
+if(SAME)AN.url=location.origin;   // web version: AN Search is this same server
 if(SRC==="serp"&&!SKEY)SRC="an";   // SerpApi key removed: use the NAS
 function anBase(){var b=String(AN.url||"").trim().replace(/\/+$/,"");return !b?"":/^https?:\/\//i.test(b)?b:"http://"+b;}
 function anKey(){return String(AN.key||"").trim()||AN_DEFAULT;}
@@ -247,8 +280,8 @@ function hav(a,b,c,d){var r=6371,p=Math.PI/180,x=(c-a)*p,y=(d-b)*p,h=Math.sin(x/
 function allCities(){return BUILTIN.concat(CUSTOM);}
 function cityById(id){return allCities().filter(function(c){return c.id===id;})[0]||BUILTIN[1];}
 function score(p){if(!p.rating)return 0;var m=15,C=4.3,v=p.votes||0;return (v/(v+m))*p.rating+(m/(v+m))*C;}
-function openUrl(u){if(NATIVE){NATIVE.postMessage({t:"open",url:u});}else{window.open(u,"_blank");}}
-function tick(){if(NATIVE)NATIVE.postMessage({t:"haptic"});}
+function openUrl(u){if(NATIVE){NATIVE.postMessage({t:"open",url:u});}else if(/^tel:/i.test(u)){location.href=u;}else{window.open(u,"_blank","noopener");}}
+function tick(){if(NATIVE)NATIVE.postMessage({t:"haptic"});else if(navigator.vibrate){try{navigator.vibrate(6);}catch(e){}}}
 
 /* ---------- native bridge ---------- */
 var pend={},pid=0,locCb=null;
@@ -276,7 +309,10 @@ function getJson(url){
       NATIVE.postMessage({t:"fetch",id:id,url:url,method:"GET"});
       setTimeout(function(){if(pend[id]){delete pend[id];rej(new Error("timeout"));}},25000);
     }else{
-      fetch(url).then(function(r){return r.text().then(function(t){var j=null;try{j=JSON.parse(t);}catch(e){}res({status:r.status,json:j,text:t});});}).catch(rej);
+      var own=url.indexOf(location.origin+"/")===0;
+      var go=(SAME&&!own)?fetch(location.origin+"/x/get?url="+encodeURIComponent(url),{headers:{"X-API-Key":anKey()}}):fetch(url);
+      var tm=setTimeout(function(){rej(new Error("timeout"));},30000);
+      go.then(function(r){return r.text().then(function(t){clearTimeout(tm);var j=null;try{j=JSON.parse(t);}catch(e){}res({status:r.status,json:j,text:t});});}).catch(function(e){clearTimeout(tm);rej(e);});
     }
   });
 }
@@ -284,7 +320,7 @@ function whereAmI(){
   return new Promise(function(res,rej){
     if(NATIVE){locCb=function(p,err){p?res(p):rej(new Error(err||"Location unavailable"));};NATIVE.postMessage({t:"loc"});setTimeout(function(){if(locCb){locCb=null;rej(new Error("Location timed out"));}},20000);return;}
     if(!navigator.geolocation)return rej(new Error("Location is not available"));
-    navigator.geolocation.getCurrentPosition(function(p){res({lat:p.coords.latitude,lng:p.coords.longitude});},function(e){rej(new Error(e&&e.code===1?"Location permission is off. Turn it on in iPhone Settings > Privacy > Location Services.":"Could not get your location"));},{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+    navigator.geolocation.getCurrentPosition(function(p){res({lat:p.coords.latitude,lng:p.coords.longitude});},function(e){rej(new Error(e&&e.code===1?(WEB?"Location is blocked for this page. Allow location for this site in the browser (Safari: aA → Website Settings → Location), then try again.":"Location permission is off. Turn it on in iPhone Settings > Privacy > Location Services."):"Could not get your location"));},{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
   });
 }
 function niceError(r){
@@ -299,7 +335,13 @@ function niceError(r){
 /* ---------- search ---------- */
 function bounds(c,r){var dl=r/110.574,dg=r/(111.32*Math.cos(c.lat*Math.PI/180));return {low:{latitude:c.lat-dl,longitude:c.lng-dg},high:{latitude:c.lat+dl,longitude:c.lng+dg}};}
 function cacheKey(c,r,cat,q){return [SRC,c.lat.toFixed(2),c.lng.toFixed(2),r,cat,q].join("|");}
-function wanted(){return CATS.filter(function(c){return S.cats[c.id];});}
+function otherQ(){return String(S.otherQ||"").trim().slice(0,60);}
+function wanted(){
+  return CATS.filter(function(c){return S.cats[c.id]&&(!c.other||otherQ());}).map(function(c){
+    if(!c.other)return c;
+    var q=otherQ();return {id:"other",label:q,ic:c.ic,q:q,tag:q.charAt(0).toUpperCase()+q.slice(1),other:1};
+  });
+}
 function norm(p,cat){
   if(!p||!p.location||p.businessStatus==="CLOSED_PERMANENTLY")return null;
   return {id:p.id,name:(p.displayName&&p.displayName.text)||"Unnamed firm",addr:p.formattedAddress||"",lat:p.location.latitude,lng:p.location.longitude,
@@ -390,7 +432,7 @@ function anNames(my){
   anReach().then(function(ok){
     if(!ok||my!==scanId)return;
     var now=Date.now(),city=cityById(S.city),cname=city.cur?(R.center?nearestCityName(R.center):""):city.name;
-    var todo=sorted().slice(0,12).filter(function(p){var n=NAMES[p.id]||{};return !n.m&&!n.a&&!nameFromTitle(p.name)&&!(n.an&&now-n.an<30*86400000);});
+    var todo=sorted().filter(isPro).slice(0,12).filter(function(p){var n=NAMES[p.id]||{};return !n.m&&!n.a&&!nameFromTitle(p.name)&&!(n.an&&now-n.an<30*86400000);});
     var i=0;
     function next(){
       if(my!==scanId||i>=todo.length)return Promise.resolve();
@@ -525,11 +567,11 @@ function ownHtml(p){var o=ownerOf(p);return o?' <span class="own'+(o.guess?' gue
 var SKIPHOST=/(facebook|instagram|justdial|linkedin|wa\.me|whatsapp|youtube|twitter|indiamart|sulekha|google|goo\.gl|maps\.app|houzz|urbanclap|urbancompany)/i;
 var scanId=0;
 function scanNames(){
-  if(!NATIVE)return;
+  if(!NATIVE&&!SAME)return;
   var my=++scanId,now=Date.now();
   var todo=sorted().slice(0,Math.min(Math.max(R.shown||PAGE,40),120)).filter(function(p){
     var n=NAMES[p.id]||{};
-    return p.web&&!SKIPHOST.test(p.web)&&!n.m&&!n.a&&!(n.v===2&&n.t&&now-n.t<30*86400000)&&!nameFromTitle(p.name);
+    return isPro(p)&&p.web&&!SKIPHOST.test(p.web)&&!n.m&&!n.a&&!(n.v===2&&n.t&&now-n.t<30*86400000)&&!nameFromTitle(p.name);
   });
   var i=0;
   function one(p){
@@ -582,7 +624,7 @@ function render(){
   var a=sorted(),m=$("meta");
   m.hidden=!a.length;
   var city=cityById(S.city);
-  $("count").textContent=R.nameQ?(a.length+" firm"+(a.length===1?"":"s")+" for “"+R.nameQ+"” in "+(R.area?R.area.name:R.place||"this area")):(a.length+(R.area?" found in "+R.area.name:" found within "+fmtKm(S.radius))+(R.fromCache?" · saved results":""));
+  $("count").textContent=R.nameQ?(a.length+" result"+(a.length===1?"":"s")+" for “"+R.nameQ+"” in "+(R.area?R.area.name:R.place||"this area")):(a.length+(R.area?" found in "+R.area.name:" found within "+fmtKm(S.radius))+(R.fromCache?" · saved results":""));
   $("sort").innerHTML=SORTS.filter(function(s){return !(R.area&&s.id==="near");}).map(function(s){return '<button data-s="'+s.id+'" class="'+(S.sort===s.id?"on":"")+'">'+s.label+'</button>';}).join("");
   var shown=a.slice(0,R.shown||PAGE);
   $("list").innerHTML=a.length?shown.map(function(p,i){
@@ -590,7 +632,7 @@ function render(){
     var hasR=p.votes>0;
     return '<article class="card" data-i="'+i+'" data-id="'+esc(p.id)+'">'+
       '<div class="rank'+(i<3&&S.sort==="best"&&hasR?" top":"")+'">'+(i+1)+'</div>'+
-      '<h3 class="serif">'+esc(p.name)+'<span class="ownwrap">'+ownHtml(p)+'</span> <a class="pen" data-edit="'+i+'" href="#" aria-label="Edit name">✎</a></h3>'+
+      '<h3 class="serif">'+esc(p.name)+(isPro(p)?'<span class="ownwrap">'+ownHtml(p)+'</span> <a class="pen" data-edit="'+i+'" href="#" aria-label="Edit name">✎</a>':'')+'</h3>'+
       (hasR?'<div class="rate"><b>'+p.rating.toFixed(1)+'</b><span class="stars">★★★★★<i style="width:'+pct+'%">★★★★★</i></span><span>'+p.votes.toLocaleString("en-IN")+' reviews</span></div>':'<div class="rate"><span>No reviews yet</span></div>')+
       '<div class="tags">'+(p.match?'<span class="tag" style="background:#E9A82033">'+esc(p.match)+'</span>':'')+p.cats.map(function(c){return '<span class="tag">'+esc(c)+'</span>';}).join("")+(R.area?(p.where?'<span class="tag dist">'+esc(p.where)+'</span>':''):'<span class="tag dist">'+fmtDist(p.dist)+' away</span>')+'</div>'+
       (p.addr?'<div class="addr">'+esc(p.addr)+'</div>':'')+
@@ -968,7 +1010,8 @@ function paintChips(){
   $("r-lab").textContent=isRegion(area)?"Area":"Radius";
   $("radius").innerHTML=isRegion(area)?'<div class="whole">'+esc(regionText(area))+'</div>':radiusHtml();
   if(!isRegion(area))wireRadius();
-  $("cats").innerHTML=CATS.map(function(c){return '<button class="chip'+(S.cats[c.id]?" on":"")+'" data-k="'+c.id+'">'+c.label+'</button>';}).join("");
+  var w=wanted();
+  $("cat-btn").innerHTML='<span>'+(w.length?w.map(function(c){return esc(c.ic+" "+(c.other?"“"+c.label+"”":c.label));}).join(" · "):"Choose what to look for")+'</span><b>Change ▾</b>';
 }
 function paintUsage(){
   var u=usage();$("u-bar").style.width=Math.min(100,u.n/limit()*100)+"%";$("u-bar").style.background=u.n>=limit()?"#C8431D":"#2E7D5B";
@@ -989,7 +1032,7 @@ function save(){sv("anf-state",S);}
 
 document.addEventListener("click",function(e){
   if(!e.target.closest(".wsearch"))closeSug();
-  var t=e.target.closest("[data-rstep],[data-sug],[data-sugmap],[data-sugname],[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
+  var t=e.target.closest("[data-cat],[data-rstep],[data-sug],[data-sugmap],[data-sugname],[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
   if(t.dataset.sug!=null&&t.dataset.sug!==""){e.preventDefault();tick();var o=SUG[+t.dataset.sug];if(o)choosePlace(o.p);return;}
   if(t.dataset.rstep){e.preventDefault();tick();setRadius(S.radius+0.1*(+t.dataset.rstep),true);return;}
   if(t.dataset.sugmap){e.preventDefault();tick();pickFromBox(true);return;}
@@ -1006,6 +1049,11 @@ document.addEventListener("click",function(e){
   if(t.dataset.c){S.city=t.dataset.c;}
   if(t.dataset.r){S.radius=+t.dataset.r;}
   if(t.dataset.k){S.cats[t.dataset.k]=!S.cats[t.dataset.k];}
+  if(t.dataset.cat){
+    var id=t.dataset.cat;S.cats[id]=!S.cats[id];
+    if(id==="other"&&S.cats.other&&!otherQ())setTimeout(function(){$("other-in").focus();},60);
+    save();paintCatList();paintChips();return;
+  }
   if(t.dataset.s){S.sort=t.dataset.s;save();render();return;}
   save();paintChips();
 });
@@ -1084,6 +1132,24 @@ $("name-clear").onclick=function(){
   if(!editing)return;var n=NAMES[editing.id]||{};delete n.m;delete n.a;n.t=Date.now();NAMES[editing.id]=n;sv("anf-names",NAMES);
   $("sheet-name").classList.remove("open");paintOwner(editing);
 };
+function paintCatList(){
+  $("cat-list").innerHTML=CATS.map(function(c){
+    return '<button class="catrow'+(S.cats[c.id]?" on":"")+'" data-cat="'+c.id+'" type="button"><span class="ci">'+c.ic+'</span><span class="cl">'+esc(c.label)+'</span><span class="ck">✓</span></button>';
+  }).join("");
+}
+function openCats(){$("other-in").value=S.otherQ||"";paintCatList();$("sheet-cat").classList.add("open");}
+function closeCats(){
+  var q=$("other-in").value.trim();S.otherQ=q;if(q)S.cats.other=true;else S.cats.other=false;
+  if(!wanted().length)S.cats.arch=true;
+  save();paintChips();$("sheet-cat").classList.remove("open");
+}
+$("cat-btn").onclick=function(){tick();openCats();};
+$("cat-done").onclick=function(){tick();closeCats();};
+$("other-in").addEventListener("input",function(){var on=!!this.value.trim();if(on!==!!S.cats.other){S.cats.other=on;paintCatList();}});
+$("other-in").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();closeCats();}});
+$("sheet-cat").addEventListener("click",function(e){if(e.target===$("sheet-cat"))closeCats();});
+if(SAME){$("an-url").hidden=true;$("an-find").hidden=true;}
+if(WEB)$("ver").textContent="AN Architects · version 1.8 · web";
 ["sheet-set","sheet-city","sheet-name"].forEach(function(id){$(id).addEventListener("click",function(e){if(e.target===$(id))$(id).classList.remove("open");});});
 
 /* ---------- first run ---------- */

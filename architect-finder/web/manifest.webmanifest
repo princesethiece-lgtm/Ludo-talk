@@ -1,0 +1,23 @@
+{
+ "name": "AN Architects",
+ "short_name": "AN Architects",
+ "description": "Find the best architects, consultants, interior designers, petrol pumps, restaurants and hotels nearby",
+ "start_url": "/",
+ "scope": "/",
+ "display": "standalone",
+ "background_color": "#F4EFE4",
+ "theme_color": "#10233F",
+ "icons": [
+  {
+   "src": "icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "any maskable"
+  }
+ ]
+}
