@@ -143,6 +143,7 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
     <div class="sep"></div>
     <div class="lab">Looking for</div>
     <button class="catbtn" id="cat-btn" type="button"></button>
+    <div class="wsearch" id="oq-wrap" hidden style="margin-top:10px"><input type="search" id="oq" placeholder="What to find? e.g. high end home theater, automation" autocomplete="off" autocapitalize="none" spellcheck="false" enterkeyhint="search"></div>
     <div class="sep"></div>
     <div class="lab">Name <span style="text-transform:none;letter-spacing:0;font-weight:500">— optional: an architect's name when you don't know the firm, or a place's name</span></div>
     <div class="wsearch nsearch"><input type="search" id="n-in" placeholder="e.g. Balwinder" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="search"></div>
@@ -489,6 +490,7 @@ function fetchCat(cat,center,radius,token,opt){
 }
 function search(more){
   if(R.busy)return;
+  if(!more&&S.cats.other&&!otherQ()){$("oq-wrap").hidden=false;$("oq").focus();note("Type what to find in the Others box, e.g. high end home theater.",true);return;}
   if(!more&&nameVal())return searchByName();
   if(!curKey()){openSettings();if(SRC==="an")anMsg("Enter the NAS address or press Find NAS.",true);return;}
   var cats=wanted();if(!cats.length){note("Choose at least one thing to look for.",true);return;}
@@ -856,6 +858,7 @@ function showSug(){
     if(SUG.length&&SUG[0].s<0.9)h='<div class="dym">Did you mean…</div>';
   }
   h+=SUG.map(function(o,i){return '<button data-sug="'+i+'"><span>'+esc(placeLabel(o.p))+'</span><small>'+esc(o.p.id.indexOf("g:")===0?placeSub(o.p):"Place you added")+'</small></button>';}).join("");
+  if(t.length>=3&&/[a-z]/i.test(t)&&(!SUG.length||SUG[0].s<0.8))h='<button data-sugfind="1"><span>🔎 Find “'+esc(t)+'”</span><small>in '+esc(cityById(S.city).name)+'</small></button>'+h;
   if(t.length>=3&&/[a-z]/i.test(t)&&(!SUG.length||SUG[0].s<0.8))h+='<button data-sugname="1"><span>👤 Architect named “'+esc(t)+'”</span><small>in '+esc(cityById(S.city).name)+'</small></button>';
   if(t.length>=3&&(!SUG.length||SUG[0].s<0.97))h+='<button data-sugmap="1"><span>🔎 Find “'+esc(t)+'” on the map</span><small>any town or area</small></button>';
   $("w-sug").innerHTML=h;$("w-sug").hidden=!h;
@@ -1053,6 +1056,7 @@ function paintChips(){
   $("r-lab").textContent=isRegion(area)?"Area":"Radius";
   $("radius").innerHTML=isRegion(area)?'<div class="whole">'+esc(regionText(area))+'</div>':radiusHtml();
   if(!isRegion(area))wireRadius();
+  $("oq-wrap").hidden=!S.cats.other;if(document.activeElement!==$("oq"))$("oq").value=S.otherQ||"";
   var w=wanted();
   $("cat-btn").innerHTML='<span>'+(w.length?w.map(function(c){return esc(c.ic+" "+(c.other?"“"+c.label+"”":c.label));}).join(" · "):"Choose what to look for")+'</span><b>Change ▾</b>';
 }
@@ -1075,9 +1079,10 @@ function save(){sv("anf-state",S);}
 
 document.addEventListener("click",function(e){
   if(!e.target.closest(".wsearch"))closeSug();
-  var t=e.target.closest("[data-cat],[data-rstep],[data-sug],[data-sugmap],[data-sugname],[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
+  var t=e.target.closest("[data-sugfind],[data-cat],[data-rstep],[data-sug],[data-sugmap],[data-sugname],[data-edit],[data-src],[data-c],[data-r],[data-k],[data-s],[data-tel],[data-map],[data-web],[data-del],#c-add,#b-more");if(!t)return;
   if(t.dataset.sug!=null&&t.dataset.sug!==""){e.preventDefault();tick();var o=SUG[+t.dataset.sug];if(o)choosePlace(o.p);return;}
   if(t.dataset.rstep){e.preventDefault();tick();setRadius(S.radius+0.1*(+t.dataset.rstep),true);return;}
+  if(t.dataset.sugfind){e.preventDefault();tick();S.otherQ=$("w-in").value.trim();S.cats.other=true;CATS.forEach(function(c){if(!c.other)S.cats[c.id]=false;});$("w-in").value="";closeSug();save();paintChips();search(false);return;}
   if(t.dataset.sugmap){e.preventDefault();tick();pickFromBox(true);return;}
   if(t.dataset.sugname){e.preventDefault();tick();$("n-in").value=$("w-in").value.trim();$("w-in").value="";closeSug();goLabel();search(false);return;}
   if(t.dataset.edit!=null&&t.dataset.edit!==""){e.preventDefault();tick();openName(sorted()[+t.dataset.edit]);return;}
@@ -1094,7 +1099,7 @@ document.addEventListener("click",function(e){
   if(t.dataset.k){S.cats[t.dataset.k]=!S.cats[t.dataset.k];}
   if(t.dataset.cat){
     var id=t.dataset.cat;S.cats[id]=!S.cats[id];
-    if(id==="other"&&S.cats.other&&!otherQ())setTimeout(function(){$("other-in").focus();},60);
+    if(id==="other"&&S.cats.other&&!otherQ()){S.cats.other=true;}
     save();paintCatList();paintChips();return;
   }
   if(t.dataset.s){S.sort=t.dataset.s;save();render();return;}
@@ -1182,17 +1187,20 @@ function paintCatList(){
 }
 function openCats(){$("other-in").value=S.otherQ||"";paintCatList();$("sheet-cat").classList.add("open");}
 function closeCats(){
-  var q=$("other-in").value.trim();S.otherQ=q;if(q)S.cats.other=true;else S.cats.other=false;
-  if(!wanted().length)S.cats.arch=true;
+  var q=$("other-in").value.trim();S.otherQ=q;if(q)S.cats.other=true;
+  if(!S.cats.other&&!wanted().length)S.cats.arch=true;
   save();paintChips();$("sheet-cat").classList.remove("open");
+  if(S.cats.other&&!otherQ())setTimeout(function(){$("oq").focus();},80);
 }
+$("oq").addEventListener("input",function(){S.otherQ=this.value;save();});
+$("oq").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();S.otherQ=this.value.trim();save();paintChips();this.blur();tick();search(false);}});
 $("cat-btn").onclick=function(){tick();openCats();};
 $("cat-done").onclick=function(){tick();closeCats();};
-$("other-in").addEventListener("input",function(){var on=!!this.value.trim();if(on!==!!S.cats.other){S.cats.other=on;paintCatList();}});
+$("other-in").addEventListener("input",function(){if(this.value.trim()&&!S.cats.other){S.cats.other=true;paintCatList();}});
 $("other-in").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();closeCats();}});
 $("sheet-cat").addEventListener("click",function(e){if(e.target===$("sheet-cat"))closeCats();});
 if(SAME){$("an-url").hidden=true;$("an-find").hidden=true;}
-if(WEB)$("ver").textContent="AN Architects · version 1.9 · web";
+if(WEB)$("ver").textContent="AN Architects · version 2.0 · web";
 /* ⟳ top right (web version): ask the NAS for the newest page, then reload — the last list stays */
 if(WEB){
   $("b-reload").hidden=false;
