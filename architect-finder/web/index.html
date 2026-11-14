@@ -285,7 +285,19 @@ function hav(a,b,c,d){var r=6371,p=Math.PI/180,x=(c-a)*p,y=(d-b)*p,h=Math.sin(x/
 function allCities(){return BUILTIN.concat(CUSTOM);}
 function cityById(id){return allCities().filter(function(c){return c.id===id;})[0]||BUILTIN[1];}
 function score(p){if(!p.rating)return 0;var m=15,C=4.3,v=p.votes||0;return (v/(v+m))*p.rating+(m/(v+m))*C;}
-function openUrl(u){if(NATIVE){NATIVE.postMessage({t:"open",url:u});}else if(/^tel:/i.test(u)){location.href=u;}else{window.open(u,"_blank","noopener");}}
+function openUrl(u){
+  if(NATIVE){NATIVE.postMessage({t:"open",url:u});return;}
+  if(/^tel:/i.test(u)){location.href=u;return;}
+  // iPhone: open Google Maps links straight in the Google Maps app (no empty in-app browser left behind)
+  if(/iPhone|iPad|iPod/.test(navigator.userAgent)&&/^https:\/\/(maps\.google\.com|www\.google\.com\/maps)/.test(u)){
+    var left=false,onHide=function(){left=true;};
+    document.addEventListener("visibilitychange",onHide,{once:true});
+    location.href="comgooglemapsurl://"+u.replace(/^https:\/\//,"");
+    setTimeout(function(){document.removeEventListener("visibilitychange",onHide);if(!left&&!document.hidden)window.open(u,"_blank","noopener");},1500);
+    return;
+  }
+  window.open(u,"_blank","noopener");
+}
 function tick(){if(NATIVE)NATIVE.postMessage({t:"haptic"});else if(navigator.vibrate){try{navigator.vibrate(6);}catch(e){}}}
 
 /* ---------- native bridge ---------- */
