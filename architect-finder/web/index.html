@@ -31,6 +31,8 @@ header{position:sticky;top:0;z-index:5;background:#10233F;color:#fff;padding:cal
   background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:14px 14px}
 header h1{margin:0;font-size:21px;letter-spacing:.2px;flex:1}
 header h1 small{display:block;font:500 11px/1 -apple-system,sans-serif;letter-spacing:1.6px;text-transform:uppercase;opacity:.65;margin-bottom:4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.icon-btn.spin svg{animation:spin .8s linear infinite}
 .icon-btn{width:38px;height:38px;border-radius:12px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;display:grid;place-items:center;font-size:18px}
 main{padding:14px 16px 0;max-width:640px;margin:0 auto}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;box-shadow:var(--shadow)}
@@ -122,6 +124,9 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
 <body>
 <header>
   <h1 class="serif"><small>AN Architects · nearby</small>Find nearby</h1>
+  <button class="icon-btn" id="b-reload" aria-label="Refresh — load the newest version" hidden>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+  </button>
   <button class="icon-btn" id="b-set" aria-label="Settings">
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
   </button>
@@ -180,7 +185,7 @@ code{background:var(--chip);padding:2px 6px;border-radius:6px;font-size:13px;wor
   <div id="city-list"></div>
   <div class="row" style="margin-top:14px"><button class="btn2" id="clear-cache">Clear saved results</button></div>
   <div class="row" style="margin-top:18px"><button class="btn2 pri" id="set-close" style="flex:1">Done</button></div>
-  <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px" id="ver">AN Architects · version 1.8</p>
+  <p style="text-align:center;font-size:12px;color:var(--muted);margin-top:14px" id="ver">AN Architects · version 1.9</p>
 </div></div>
 
 <div class="sheet" id="sheet-cat"><div class="in">
@@ -357,11 +362,22 @@ function merge(list,center,radius,where){
   R.items=Object.keys(by).map(function(k){return by[k];});
 }
 function serpZoom(lat,r){var z=Math.round(Math.log(156543*Math.cos(lat*Math.PI/180)/(5*r))/Math.LN2);return Math.max(10,Math.min(16,z));}
+function cidOf(p){
+  if(p.data_cid)return String(p.data_cid);
+  var m=/:0x([0-9a-f]{1,16})$/i.exec(p.data_id||"");
+  if(m&&typeof BigInt==="function"){try{return BigInt("0x"+m[1]).toString();}catch(e){}}
+  return "";
+}
+function placeLink(name,addr,pid,cid,lat,lng){
+  if(cid)return "https://maps.google.com/?cid="+cid;
+  if(pid)return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(name+(addr?", "+addr:""))+"&query_place_id="+encodeURIComponent(pid);
+  return "https://www.google.com/maps/search/?api=1&query="+lat+","+lng;
+}
 function serpNorm(p,cat){
   var g=p.gps_coordinates;if(!g)return null;
-  var ph=p.phone||"";
+  var ph=p.phone||"",cid=cidOf(p);
   return {id:p.place_id||p.data_id||p.title,typ:(p.types||[]).concat(p.type?[p.type]:[]).join(" "),name:p.title||"Unnamed firm",addr:p.address||"",lat:g.latitude,lng:g.longitude,rating:p.rating||0,votes:p.reviews||0,phone:ph,tel:ph,
-    maps:p.place_id?("https://www.google.com/maps/place/?q=place_id:"+p.place_id):("https://www.google.com/maps/search/?api=1&query="+g.latitude+","+g.longitude),web:p.website||"",cats:[cat]};
+    cid:cid,maps:placeLink(p.title||"",p.address||"",p.place_id,cid,g.latitude,g.longitude),web:p.website||"",cats:[cat]};
 }
 function fetchSerp(cat,center,radius,token,nas,opt){
   var start=token?+token:0;
@@ -645,7 +661,18 @@ function render(){
   paintMore();
   scanNames();
   setTimeout(nearEnd,60);
+  saveLast();
 }
+var LASTK="anf-last";
+function saveLast(){
+  try{
+    if(!R.items.length){localStorage.removeItem(LASTK);return;}
+    localStorage.setItem(LASTK,JSON.stringify({t:Date.now(),items:R.items,tokens:R.tokens,center:R.center,area:R.area||null,
+      nameQ:R.nameQ||null,place:R.place||"",shown:R.shown||PAGE,fromCache:R.fromCache,cachedAt:R.cachedAt||0}));
+  }catch(e){}
+}
+var lastYT=0;
+window.addEventListener("scroll",function(){if(lastYT)return;lastYT=setTimeout(function(){lastYT=0;try{localStorage.setItem("anf-last-y",String(Math.round(window.scrollY||0)));}catch(e){}},400);},{passive:true});
 function paintMore(){
   var a=R.items,more=a.length>(R.shown||PAGE)||CATS.some(function(c){return S.cats[c.id]&&R.tokens[c.id];});
   $("more").innerHTML=!a.length?"":R.loadingMore?'<div class="end">Loading more…</div>':more&&!R.autoStop?'<button class="more" id="b-more">Load more results</button>':'<div class="end">That’s all — '+a.length+' results</div>';
@@ -668,7 +695,11 @@ if("IntersectionObserver" in window){
 var scrollT=0;
 window.addEventListener("scroll",function(){if(scrollT)return;scrollT=setTimeout(function(){scrollT=0;nearEnd();},150);},{passive:true});
 function fmtDist(d){return d<1?(Math.max(10,Math.round(d*100)*10)+" m"):(d.toFixed(1)+" km");}
-function mapUrl(p){return p.maps||("https://maps.apple.com/?ll="+p.lat+","+p.lng+"&q="+encodeURIComponent(p.name));}
+function mapUrl(p){
+  var m=/maps\/place\/\?q=place_id:([^&]+)/.exec(p.maps||"");   // links saved by older versions did not open in the Maps app
+  if(m)return placeLink(p.name,p.addr,decodeURIComponent(m[1]),p.cid,p.lat,p.lng);
+  return p.maps||placeLink(p.name,p.addr,"",p.cid,p.lat,p.lng);
+}
 
 /* ---------- places: India, states and cities — offline list with spelling correction ---------- */
 var GEO=[["India","","n",22.3511,78.6677,1616],["Andhra Pradesh","","s",15.9241,80.1864,427],["Arunachal Pradesh","","s",28.0938,94.5921,286],["Assam","","s",26.4074,93.2551,314],["Bihar","","s",25.6441,85.9065,249],["Chhattisgarh","","s",21.6637,81.8406,351],["Goa","","s",15.3005,74.0855,58],["Gujarat","","s",22.385,71.7453,323],["Haryana","","s",29.0,76.0,182],["Himachal Pradesh","","s",31.9292,77.1828,161],["Jharkhand","","s",23.456,85.2557,236],["Karnataka","","s",14.9562,75.7897,382],["Kerala","","s",10.3529,76.512,250],["Madhya Pradesh","","s",23.8143,77.5341,446],["Maharashtra","","s",19.567,76.4165,431],["Manipur","","s",24.7209,93.9229,103],["Meghalaya","","s",25.5379,91.2999,150],["Mizoram","","s",23.2146,92.8688,143],["Nagaland","","s",26.1631,94.5885,102],["Odisha","","s",20.5431,84.6897,317],["Punjab","","s",30.9293,75.5005,165],["Rajasthan","","s",26.8106,73.7685,435],["Sikkim","","s",27.6015,88.4546,58],["Tamil Nadu","","s",11.3324,78.6099,304],["Telangana","","s",17.8496,79.1152,226],["Tripura","","s",23.7751,91.7025,88],["Uttar Pradesh","","s",27.1303,80.8597,373],["Uttarakhand","","s",30.0417,79.0897,167],["West Bengal","","s",22.9965,87.6856,315],["Delhi","","u",28.6328,77.2198,27],["Jammu and Kashmir","","u",33.6649,75.163,140],["Ladakh","","u",33.9456,77.6569,190],["Puducherry","","u",10.9156,79.8069,40],["Andaman and Nicobar Islands","","u",12.6112,92.8317,384],["Dadra and Nagar Haveli and Daman and Diu","","u",20.7182,70.9324,122],["Lakshadweep","","u",10.3337,72.9205,252],["Ludhiana","Punjab","c",30.909,75.8516],["Jalandhar","Punjab","c",31.3324,75.5769],["Amritsar","Punjab","c",31.6357,74.8787],["Patiala","Punjab","c",30.3302,76.4008],["Bathinda","Punjab","c",30.2068,74.9464],["Mohali","Punjab","c",30.6909,76.7115],["Hoshiarpur","Punjab","c",31.5329,75.9025],["Pathankot","Punjab","c",32.2692,75.6529],["Moga","Punjab","c",30.8223,75.1731],["Firozpur","Punjab","c",30.9612,74.6092],["Kapurthala","Punjab","c",31.3815,75.3844],["Phagwara","Punjab","c",31.2207,75.7696],["Batala","Punjab","c",31.8193,75.2],["Sangrur","Punjab","c",30.2432,75.8358],["Barnala","Punjab","c",30.3762,75.5436],["Khanna","Punjab","c",30.7006,76.2221],["Rajpura","Punjab","c",30.4777,76.5938],["Zirakpur","Punjab","c",30.6557,76.8201],["Kharar","Punjab","c",30.7488,76.6429],["Abohar","Punjab","c",30.1451,74.1957],["Malerkotla","Punjab","c",30.5331,75.8808],["Fazilka","Punjab","c",30.4032,74.0311],["Faridkot","Punjab","c",30.673,74.7517],["Sri Muktsar Sahib","Punjab","c",30.4692,74.5182],["Mansa","Punjab","c",29.9947,75.4022],["Gurdaspur","Punjab","c",32.0419,75.4002],["Tarn Taran","Punjab","c",31.4519,74.9278],["Rupnagar","Punjab","c",30.9688,76.5261],["Nawanshahr","Punjab","c",31.1257,76.1159],["Fatehgarh Sahib","Punjab","c",30.6467,76.3888],["Mandi Gobindgarh","Punjab","c",30.6518,76.2999],["Sunam","Punjab","c",30.134,75.8063],["Nabha","Punjab","c",30.374,76.1529],["Samrala","Punjab","c",30.8369,76.1914],["Jagraon","Punjab","c",30.8042,75.4754],["Dera Bassi","Punjab","c",30.5882,76.8439],["Anandpur Sahib","Punjab","c",31.2347,76.4973],["Nangal","Punjab","c",31.3837,76.3754],["Mukerian","Punjab","c",31.952,75.614],["Dasuya","Punjab","c",31.8143,75.6573],["Panchkula","Haryana","c",30.6975,76.8551],["Ambala","Haryana","c",30.3844,76.7704],["Yamunanagar","Haryana","c",30.1231,77.2863],["Kurukshetra","Haryana","c",29.9694,76.8483],["Karnal","Haryana","c",29.6803,76.9896],["Panipat","Haryana","c",29.3913,76.9772],["Sonipat","Haryana","c",28.9954,77.0234],["Rohtak","Haryana","c",28.9011,76.5802],["Hisar","Haryana","c",29.1563,75.7292],["Sirsa","Haryana","c",29.5373,75.0378],["Fatehabad","Haryana","c",29.5104,75.4535],["Jind","Haryana","c",29.3152,76.3141],["Kaithal","Haryana","c",29.7997,76.399],["Bhiwani","Haryana","c",28.7932,76.1391],["Charkhi Dadri","Haryana","c",28.592,76.272],["Gurugram","Haryana","c",28.4646,77.0299],["Faridabad","Haryana","c",28.4031,77.3106],["Rewari","Haryana","c",28.1956,76.6165],["Jhajjar","Haryana","c",28.6067,76.6581],["Palwal","Haryana","c",28.1406,77.326],["Nuh","Haryana","c",28.1033,77.0048],["Narnaul","Haryana","c",28.0438,76.1062],["Bahadurgarh","Haryana","c",28.6933,76.9332],["Hansi","Haryana","c",29.1053,75.9634],["Tohana","Haryana","c",29.7108,75.9042],["Mandi Dabwali","Haryana","c",29.9657,74.7029],["Chandigarh","Chandigarh","c",30.7334,76.7797],["New Delhi","Delhi","c",28.6139,77.209],["Dwarka","Delhi","c",28.5778,77.0582],["Rohini","Delhi","c",28.7063,77.1088],["Shimla","Himachal Pradesh","c",31.104,77.1708],["Dharamshala","Himachal Pradesh","c",32.2143,76.3197],["Solan","Himachal Pradesh","c",30.9078,77.1024],["Mandi","Himachal Pradesh","c",31.7084,76.9294],["Kullu","Himachal Pradesh","c",31.9579,77.1089],["Manali","Himachal Pradesh","c",32.2455,77.1873],["Una","Himachal Pradesh","c",31.4671,76.2721],["Hamirpur","Himachal Pradesh","c",31.6849,76.5254],["Bilaspur","Himachal Pradesh","c",31.3381,76.7612],["Kangra","Himachal Pradesh","c",32.1032,76.2724],["Baddi","Himachal Pradesh","c",30.934,76.8063],["Chamba","Himachal Pradesh","c",32.5565,76.125],["Nahan","Himachal Pradesh","c",30.5602,77.2924],["Palampur","Himachal Pradesh","c",32.1095,76.536],["Jammu","Jammu and Kashmir","c",32.7186,74.8581],["Srinagar","Jammu and Kashmir","c",34.0747,74.8204],["Katra","Jammu and Kashmir","c",32.9925,74.9318],["Kathua","Jammu and Kashmir","c",32.3766,75.5243],["Udhampur","Jammu and Kashmir","c",32.922,75.1331],["Anantnag","Jammu and Kashmir","c",33.7369,75.1455],["Leh","Ladakh","c",34.1642,77.5848],["Noida","Uttar Pradesh","c",28.5706,77.3272],["Greater Noida","Uttar Pradesh","c",28.4671,77.5138],["Ghaziabad","Uttar Pradesh","c",28.6712,77.412],["Lucknow","Uttar Pradesh","c",26.8381,80.9346],["Kanpur","Uttar Pradesh","c",26.4609,80.3218],["Agra","Uttar Pradesh","c",27.1753,78.0098],["Varanasi","Uttar Pradesh","c",25.3356,83.0076],["Prayagraj","Uttar Pradesh","c",25.4381,81.8338],["Meerut","Uttar Pradesh","c",28.9963,77.7062],["Saharanpur","Uttar Pradesh","c",29.9637,77.5427],["Bareilly","Uttar Pradesh","c",28.3551,79.4179],["Aligarh","Uttar Pradesh","c",27.8815,78.069],["Moradabad","Uttar Pradesh","c",28.8335,78.7733],["Mathura","Uttar Pradesh","c",27.4956,77.6856],["Vrindavan","Uttar Pradesh","c",27.5754,77.6938],["Gorakhpur","Uttar Pradesh","c",26.76,83.3668],["Jhansi","Uttar Pradesh","c",25.4502,78.58],["Muzaffarnagar","Uttar Pradesh","c",29.4662,77.6962],["Ayodhya","Uttar Pradesh","c",26.7991,82.2052],["Jaipur","Rajasthan","c",26.9155,75.819],["Jodhpur","Rajasthan","c",26.2968,73.0351],["Udaipur","Rajasthan","c",24.5787,73.6863],["Kota","Rajasthan","c",25.1737,75.8574],["Bikaner","Rajasthan","c",28.0159,73.3171],["Ajmer","Rajasthan","c",26.4691,74.639],["Sri Ganganagar","Rajasthan","c",29.9271,73.8762],["Hanumangarh","Rajasthan","c",29.6153,74.2904],["Alwar","Rajasthan","c",27.5646,76.6132],["Bhilwara","Rajasthan","c",25.348,74.636],["Sikar","Rajasthan","c",27.6092,75.1396],["Jaisalmer","Rajasthan","c",26.9117,70.9125],["Pali","Rajasthan","c",25.7682,73.3275],["Bharatpur","Rajasthan","c",27.2154,77.4987],["Chittorgarh","Rajasthan","c",24.8837,74.6244],["Mount Abu","Rajasthan","c",24.5924,72.7082],["Dehradun","Uttarakhand","c",30.3256,78.0437],["Haridwar","Uttarakhand","c",29.9384,78.1453],["Rishikesh","Uttarakhand","c",30.1087,78.2916],["Roorkee","Uttarakhand","c",29.8693,77.8902],["Haldwani","Uttarakhand","c",29.2145,79.5279],["Nainital","Uttarakhand","c",29.3905,79.4609],["Mussoorie","Uttarakhand","c",30.4569,78.0783],["Rudrapur","Uttarakhand","c",28.9707,79.3973],["Mumbai","Maharashtra","c",19.055,72.8692],["Pune","Maharashtra","c",18.5214,73.8545],["Nagpur","Maharashtra","c",21.1498,79.0821],["Nashik","Maharashtra","c",20.0112,73.7902],["Thane","Maharashtra","c",19.1943,72.9702],["Navi Mumbai","Maharashtra","c",19.0308,73.0199],["Chhatrapati Sambhajinagar","Maharashtra","c",19.8773,75.339],["Kolhapur","Maharashtra","c",16.7028,74.2405],["Solapur","Maharashtra","c",17.67,75.9008],["Amravati","Maharashtra","c",20.9316,77.7588],["Ahmedabad","Gujarat","c",23.0215,72.5801],["Surat","Gujarat","c",21.2095,72.8317],["Vadodara","Gujarat","c",22.2973,73.1943],["Rajkot","Gujarat","c",22.3053,70.8028],["Gandhinagar","Gujarat","c",23.2233,72.6492],["Bhavnagar","Gujarat","c",21.7719,72.1416],["Jamnagar","Gujarat","c",22.4732,70.0552],["Anand","Gujarat","c",22.5587,72.9627],["Indore","Madhya Pradesh","c",22.7204,75.8682],["Bhopal","Madhya Pradesh","c",23.2585,77.402],["Gwalior","Madhya Pradesh","c",26.2037,78.1574],["Jabalpur","Madhya Pradesh","c",23.1702,79.9325],["Ujjain","Madhya Pradesh","c",23.1885,75.7717],["Bengaluru","Karnataka","c",12.9768,77.5901],["Mysuru","Karnataka","c",12.3052,76.6554],["Mangaluru","Karnataka","c",12.8698,74.843],["Hubballi","Karnataka","c",15.3518,75.138],["Belagavi","Karnataka","c",15.8573,74.5069],["Chennai","Tamil Nadu","c",13.0801,80.2808],["Coimbatore","Tamil Nadu","c",11.0018,76.9628],["Madurai","Tamil Nadu","c",9.9261,78.1141],["Tiruchirappalli","Tamil Nadu","c",10.8071,78.6881],["Salem","Tamil Nadu","c",11.6552,78.1582],["Hyderabad","Telangana","c",17.3606,78.4741],["Warangal","Telangana","c",17.9821,79.5971],["Visakhapatnam","Andhra Pradesh","c",17.6936,83.2921],["Vijayawada","Andhra Pradesh","c",16.5115,80.616],["Tirupati","Andhra Pradesh","c",13.6316,79.4232],["Guntur","Andhra Pradesh","c",16.2915,80.4542],["Kochi","Kerala","c",9.9679,76.2444],["Thiruvananthapuram","Kerala","c",8.4882,76.9476],["Kozhikode","Kerala","c",11.2451,75.7755],["Thrissur","Kerala","c",10.527,76.2144],["Kolkata","West Bengal","c",22.5726,88.3639],["Siliguri","West Bengal","c",26.7164,88.431],["Durgapur","West Bengal","c",23.535,87.338],["Bhubaneswar","Odisha","c",20.2603,85.8395],["Cuttack","Odisha","c",20.4686,85.8792],["Patna","Bihar","c",25.6093,85.1235],["Gaya","Bihar","c",24.7964,85.008],["Ranchi","Jharkhand","c",23.3701,85.325],["Jamshedpur","Jharkhand","c",22.8015,86.203],["Dhanbad","Jharkhand","c",23.7953,86.431],["Raipur","Chhattisgarh","c",21.2381,81.6337],["Bhilai","Chhattisgarh","c",21.2121,81.3733],["Guwahati","Assam","c",26.1806,91.7539],["Panaji","Goa","c",15.499,73.8282],["Margao","Goa","c",15.2729,73.9583],["Puducherry","Puducherry","c",11.9341,79.8306],["Gangtok","Sikkim","c",27.329,88.6123],["Shillong","Meghalaya","c",25.576,91.8828]];   // [name, state, kind (n country, s state, u union territory, c city), lat, lng, radius km]
@@ -1149,11 +1180,32 @@ $("other-in").addEventListener("input",function(){var on=!!this.value.trim();if(
 $("other-in").addEventListener("keydown",function(e){if(e.key==="Enter"){e.preventDefault();closeCats();}});
 $("sheet-cat").addEventListener("click",function(e){if(e.target===$("sheet-cat"))closeCats();});
 if(SAME){$("an-url").hidden=true;$("an-find").hidden=true;}
-if(WEB)$("ver").textContent="AN Architects · version 1.8 · web";
+if(WEB)$("ver").textContent="AN Architects · version 1.9 · web";
+/* ⟳ top right (web version): ask the NAS for the newest page, then reload — the last list stays */
+if(WEB){
+  $("b-reload").hidden=false;
+  $("b-reload").onclick=function(){
+    var b=this;if(b.classList.contains("spin"))return;b.classList.add("spin");tick();saveLast();
+    var go=function(){location.reload();};
+    if(!SAME){go();return;}
+    var t=setTimeout(go,9000);
+    fetch(location.origin+"/arch/refresh?api_key="+encodeURIComponent(anKey()),{cache:"no-store"}).then(function(){clearTimeout(t);go();},function(){clearTimeout(t);go();});
+  };
+}
 ["sheet-set","sheet-city","sheet-name"].forEach(function(id){$(id).addEventListener("click",function(e){if(e.target===$(id))$(id).classList.remove("open");});});
 
 /* ---------- first run ---------- */
+(function(){   // bring back the last list (and where you were on it) after the page was reloaded
+  try{
+    var L=JSON.parse(localStorage.getItem(LASTK)||"null");
+    if(L&&L.items&&L.items.length&&Date.now()-L.t<12*3600*1000){
+      R.items=L.items;R.tokens=L.tokens||{};R.center=L.center;R.area=L.area||null;R.nameQ=L.nameQ||null;R.place=L.place||"";
+      R.shown=L.shown||PAGE;R.fromCache=L.fromCache;R.cachedAt=L.cachedAt||0;R.restored=true;
+    }
+  }catch(e){}
+})();
 paintChips();paintUsage();render();
+if(R.restored){var y0=0;try{y0=+localStorage.getItem("anf-last-y")||0;}catch(e){}setTimeout(function(){window.scrollTo(0,y0);},80);}
 if(!curKey()&&SRC!=="an"){
   $("notice").innerHTML='<div class="note"><b>One-time setup:</b> this app needs a free Google Places API key to find reviews and phone numbers. Tap the gear at the top right and paste your key.</div>';
 }
