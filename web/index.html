@@ -95,6 +95,8 @@ input{font-family:var(--font)}
 .prow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .pnl{height:74px;display:flex;align-items:center;gap:8px;padding:8px;border-radius:18px;background:var(--glass);border:1px solid var(--glass-line);transition:box-shadow .25s,background .25s,border-color .25s;min-width:0}
 .pnl.rev{flex-direction:row-reverse}
+/* friends on one phone: the players across the table read their own panel and dice the right way up */
+#game.flat .pnl[data-c=green],#game.flat .pnl[data-c=yellow]{rotate:180deg}
 .pnl.vacant{visibility:hidden}
 .pnl.active{background:rgba(255,255,255,.13)}
 .pnl[data-c=red].active{border-color:#FF6B6B;box-shadow:0 0 0 2px #FF6B6B,0 0 26px rgba(255,90,95,.55)}
@@ -990,6 +992,7 @@ function toast(msg){
    ========================================================= */
 var canvas,bctx,boardImg,boardCss=300,dpr=1,running=false;
 function layout(){
+  $("game").classList.toggle("flat",!!(G&&G.cfg&&G.cfg.mode!=="cpu"));
   if(R3){layout3D();return;}
   var arena=$("arena"),aw=arena.clientWidth,ah=arena.clientHeight;
   var rowH=74,gap=10,frame=Math.round(Math.max(9,Math.min(16,aw*.028)));
@@ -1192,6 +1195,9 @@ function init3D(){
   R3.an=buildAnimals(scene);
   return true;
 }
+/* Friends on one phone: phone lies flat between players, so look straight down (same from every side).
+   Vs computer: keep the tilted 3D view. */
+function camElev(){return (G&&G.cfg&&G.cfg.mode!=="cpu")?1.555:ELEV;}
 function placeCam(dist,elev,azim){
   var L=R3.look,cam=R3.camera;
   cam.position.set(L.x+dist*Math.cos(elev)*Math.sin(azim),L.y+dist*Math.sin(elev),L.z+dist*Math.cos(elev)*Math.cos(azim));
@@ -1212,8 +1218,8 @@ function layout3D(){
   var st=$("stage").getBoundingClientRect(),rw=st.width-8,rh=st.height-8;
   if(rh<160)rh=Math.max(160,H*.5);
   var lo=5,hi=220;
-  for(var i=0;i<36;i++){var mid=(lo+hi)/2;placeCam(mid,ELEV,0);var b=projBox();if(b.w<=rw&&b.h<=rh)hi=mid;else lo=mid;}
-  R.dist=hi;placeCam(hi,ELEV,0);var bb=projBox();
+  for(var i=0;i<36;i++){var mid=(lo+hi)/2;placeCam(mid,camElev(),0);var b=projBox();if(b.w<=rw&&b.h<=rh)hi=mid;else lo=mid;}
+  R.dist=hi;placeCam(hi,camElev(),0);var bb=projBox();
   R.off={x:bb.cx-(st.left+st.width/2),y:bb.cy-(st.top+st.height/2)};
   cam.setViewOffset(W,H,R.off.x,R.off.y,W,H);cam.updateProjectionMatrix();
   $("toast").style.setProperty("--toast-y",(st.top+st.height/2)+"px");
@@ -1315,8 +1321,8 @@ function frame3D(now){
     pa.needsUpdate=true;B.pts.material.opacity=Math.max(0,1-B.t/B.life);
     if(B.t>=B.life){R.scene.remove(B.pts);B.pts.geometry.dispose();B.pts.material.dispose();R.bursts.splice(b,1);}
   }
-  var elev=ELEV,az=0,dist=R.dist;
-  if(R.intro){var it=(now-R.intro)/1900;if(it>=1||it<0)R.intro=0;else{var e=1-Math.pow(1-it,3);elev=1.42+(ELEV-1.42)*e;az=-.85*(1-e);dist=R.dist*(1.55-.55*e);}}
+  var elev=camElev(),az=0,dist=R.dist;
+  if(R.intro){var it=(now-R.intro)/1900;if(it>=1||it<0)R.intro=0;else{var e=1-Math.pow(1-it,3);elev=1.42+(camElev()-1.42)*e;az=-.85*(1-e);dist=R.dist*(1.55-.55*e);}}
   placeCam(dist,elev,az);
   R.scene.fog.near=dist+3;R.scene.fog.far=dist+34;
   if(R.shake){var sp=(now-R.shake.t0)/380;if(sp>=1)R.shake=null;else{var a=R.shake.amp*(1-sp);R.camera.position.x+=(Math.random()-.5)*a;R.camera.position.y+=(Math.random()-.5)*a;R.camera.updateMatrixWorld();}}
