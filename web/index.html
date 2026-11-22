@@ -528,64 +528,103 @@ function musicMood(){
   if(R3&&R3.angry){for(var c in R3.angry)if(R3.angry[c])return "grumpy";}
   return "calm";
 }
-/* a token in a home lane (or close to finishing) makes the music a bit more exciting */
-function musicTension(){
-  if(!G||!G.tokens)return false;
-  for(var c in G.tokens){var arr=G.tokens[c];for(var k=0;k<arr.length;k++)if(arr[k]>=50&&arr[k]<56)return true;}
-  return false;
+/* ---------- how exciting is the game right now? (0 = just started ... 3 = nail-biting finish) ----------
+   Looks at how far the leader has got, how close the race is, how many tokens are in the home lanes and
+   how few tokens are left. The music follows it: faster tempo, more drums, brighter sound, key goes up. */
+function musicHeat(){
+  if(!G||!G.tokens||!G.players)return 0;
+  var best=0,second=0,lane=0,fewLeft=false;
+  G.players.forEach(function(p){
+    var arr=G.tokens[p.color];if(!arr)return;
+    var sum=0,home=0;
+    arr.forEach(function(v){sum+=v<0?0:v;if(v===56)home++;else if(v>=50)lane++;});
+    var pr=sum/224;
+    if(pr>best){second=best;best=pr;}else if(pr>second)second=pr;
+    if(home>=3||(home>=2&&pr>.7))fewLeft=true;
+  });
+  var close=best>0?1-Math.min(1,(best-second)/.25):0;           /* 1 = neck and neck */
+  var h=best*1.6+close*best*.9+Math.min(lane,4)*.18+(fewLeft?.9:0)+(G.ranks&&G.ranks.length?.6:0);
+  return h<.45?0:h<.95?1:h<1.5?2:3;
+}
+function musicTension(){return musicHeat()>=2;}
+/* noise sweep that builds up before a bigger section */
+function mriser(when,dur,vol){
+  var a=AC;if(!a||!MUS.g)return;
+  var s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();s.buffer=noiseBuf(a);s.loop=true;
+  f.type="bandpass";f.Q.value=1.4;f.frequency.setValueAtTime(500,when);f.frequency.exponentialRampToValueAtTime(7000,when+dur);
+  g.gain.setValueAtTime(0.0001,when);g.gain.exponentialRampToValueAtTime(vol,when+dur*.95);g.gain.exponentialRampToValueAtTime(0.0001,when+dur+.05);
+  s.connect(f);f.connect(g);g.connect(MUS.g);s.start(when);s.stop(when+dur+.1);
+}
+/* cymbal crash when the music steps up */
+function mcrash(when,vol){
+  var a=AC;if(!a||!MUS.g)return;
+  var s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();s.buffer=noiseBuf(a);
+  f.type="highpass";f.frequency.value=5000;g.gain.setValueAtTime(vol,when);g.gain.exponentialRampToValueAtTime(0.0001,when+1.6);
+  s.connect(f);f.connect(g);g.connect(MUS.g);s.start(when,Math.random());s.stop(when+1.7);
 }
 function musicTick(){
   var a=AC;if(!a||!MUS.on)return;
   if(a.state==="suspended")a.resume();
   if(!MUS.hook)newHook();
   if(MUS.next<a.currentTime)MUS.next=a.currentTime+.05;
-  var mood=musicMood(),ten=mood==="calm"&&musicTension();
+  var mood=musicMood(),heat=mood==="calm"||mood==="grumpy"?musicHeat():3;
   var big=mood==="party"||mood==="diwali"||mood==="win",minor=mood==="grumpy"||mood==="sad";
+  /* the game got more exciting: build-up sweep + crash on the next bar */
+  if(MUS.heat==null)MUS.heat=heat;
+  if(heat>MUS.heat&&!big){MUS.stepUp=true;}
+  MUS.heat=heat;
   while(MUS.next<a.currentTime+.4){
-    var bpm={calm:ten?100:92,grumpy:84,sad:62,party:116,diwali:126,win:120}[mood]||92;
+    var bpm=big?{party:122,diwali:130,win:124}[mood]:mood==="sad"?62:([102,110,118,128][heat]-(mood==="grumpy"?8:0));
     var dt=60/bpm/2,n=MUS.n,i=n%8,bar=Math.floor(n/8),cyc=bar%16,t=MUS.next;
-    var prog=minor?PROG_M:(cyc>=8&&cyc<12?PROG_B:PROG_A),ch=prog[bar%4],key=big?2:0,root=ch[0]+key,tri=ch[1]?[0,3,7]:[0,4,7];
-    var layers=bar<2?1:bar<6?2:bar<12?3:4,rest=!big&&(bar%64)>=61;
-    var ts=t+((!big&&i%2===1)?dt*.14:0);           /* gentle swing */
-    /* pad + tanpura drone */
-    if(i===0){tri.forEach(function(k){mpad(hz(root+k-12),dt*8.3,t,big?.018:(mood==="sad"?.03:.026));});}
-    if(!big&&(i===0||i===4))mtone(hz(key-24+(i===4?7:0)),dt*7,"sine",.04,t,900);
-    /* bass */
-    if(layers>=2&&!rest){
-      if(big){if(i%2===0)mtone(hz(root-24),dt*1.5,"sine",.12,t);}
-      else if(i===0||i===5)mtone(hz(root-24),dt*(i===0?4:2.6),"sine",.1,ts);
-    }
-    /* the hook (with a soft echo) */
+    var prog=minor?PROG_M:(cyc>=8&&cyc<12?PROG_B:PROG_A),ch=prog[bar%4];
+    var key=big?3:[0,0,2,3][heat],root=ch[0]+key,tri=ch[1]?[0,3,7]:[0,4,7];
+    var lv=big?3:heat,layers=bar<1?1:bar<3?2:4,rest=lv===0&&!big&&(bar%64)>=62;
+    var ts=t+((lv===0&&i%2===1)?dt*.12:0);
+    if(i===0&&MUS.stepUp){MUS.stepUp=false;mcrash(t,.06);mdrum(t,.2,false);}
+    if(i===4&&!big&&(bar%8===7||(lv>=2&&bar%4===3)))mriser(t,dt*4,lv>=2?.05:.035);
+    /* pad + tanpura */
+    if(i===0)tri.forEach(function(k){mpad(hz(root+k-12),dt*8.3,t,mood==="sad"?.03:.02);});
+    if(lv<=1&&!big&&(i===0||i===4))mtone(hz(key-24+(i===4?7:0)),dt*7,"sine",.035,t,900);
+    /* bass: bhangra bounce, pumping harder as the game heats up */
+    if(layers>=2&&!rest&&mood!=="sad"){
+      var bpat=lv>=3?[1,1,1,1,1,1,1,1]:lv===2?[1,0,1,1,0,1,1,0]:[1,0,0,1,0,0,1,0];
+      if(bpat[i])mtone(hz(root-24+((lv>=2&&i===7)?7:0)),dt*(lv>=3?.9:1.6),lv>=2?"triangle":"sine",lv>=2?.11:.1,ts,lv>=2?900:0);
+    }else if(mood==="sad"&&i===0)mtone(hz(root-24),dt*6,"sine",.09,t);
+    /* the hook (+ echo), an octave higher when it's exciting, with a tumbi answer */
     if(layers>=2&&!rest&&mood!=="sad"){
       var ph=(bar%4)>=2?MUS.resp:MUS.hook,dg=ph[(bar%2)*8+i];
       if(dg!=null){
-        var f=hz(PENT[dg]+key+(big?12:0)-(minor?3:0)),vol=big?.045:.05,ty=big?"sawtooth":"triangle",cut=big?2400:3000;
-        mtone(f,dt*(big?1.05:1.9),ty,vol,ts,cut);
-        mtone(f,dt*1.6,ty,vol*.28,ts+dt*3,cut*.6);
+        var f=hz(PENT[dg]+key-(minor?3:0)),hot=lv>=2,ty=hot?"sawtooth":"triangle",cut=hot?2600:3000,vol=hot?.042:.05;
+        mtone(f,dt*(hot?1.1:1.8),ty,vol,ts,cut);
+        if(lv>=3)mtone(f*2,dt*.9,"triangle",.03,ts,4000);
+        mtone(f,dt*1.5,ty,vol*.28,ts+dt*3,cut*.6);
       }
+      if(lv>=2&&(i===3||i===7)&&bar%2===1)mtone(hz(PENT[[7,9,8,10][bar%4]]+key+12),dt*.5,"sawtooth",.028,t+dt*.5,3200);
     }else if(mood==="sad"&&(i===0||i===3)&&bar%2===0)mtone(hz(PENT[[5,4,3,2][bar%4]]-3),dt*3,"sine",.045,t);
-    /* percussion */
-    if(big){
-      if(i===0||i===3||i===6)mdrum(t,.16,false);else mdrum(t,.06,true);
-      mshaker(t,.022);
-      if(mood!=="party"&&(i===2||i===6))mclap(t,.07);
-    }else if(!rest&&layers>=3){
-      if(i===0||(i===5&&layers>=4))mtabla(ts,mood==="grumpy"?.16:.13,false);
-      if(mood!=="grumpy"&&(i===2||i===6||(ten&&i===7)))mtabla(ts,.05,true);
-      if(i%2===1||ten)mshaker(ts,ten?.022:.016);
+    /* drums: dhol chaal from the start, more and more of it as the game heats up */
+    if(!rest&&mood!=="sad"&&layers>=2){
+      var dk=lv>=3?.17:lv===2?.15:lv===1?.13:.11;
+      if(i===0||i===3||i===6)mdrum(t,dk,false);
+      else if(lv>=2&&i===4)mdrum(t,dk*.7,false);
+      if(i===2||i===5||(lv>=1&&i===7))mtabla(ts,.05,true);
+      if(lv>=1&&i===4)mclap(t,big?.08:.06);
+      if(lv>=1||i%2===1)mshaker(ts,lv>=2?.024:.017);
+      if(lv>=3){mdrum(t+dt/2,.035,true);}
+      if(i>=6&&bar%4===3&&lv>=1){mdrum(t,.09,true);mdrum(t+dt/2,.1,true);if(lv>=2)mdrum(t+dt/2,.12,false);}
+      if(mood==="diwali"&&(i===2||i===6))mclap(t,.08);
     }
     if(i===7&&cyc===15)mutateHook();
     if(i===7&&bar%64===63&&Math.random()<.5)newHook();
     MUS.n++;MUS.next+=dt;
   }
-  if(MUS.lp)MUS.lp.frequency.setTargetAtTime(big?8000:ten?4600:mood==="sad"?1500:mood==="grumpy"?2000:3000,a.currentTime,.7);
+  if(MUS.lp)MUS.lp.frequency.setTargetAtTime(big?9000:mood==="sad"?1500:[3200,4500,6500,9000][heat]-(mood==="grumpy"?1200:0),a.currentTime,.8);
 }
 function musicStart(){
   if(MUS.on||!SET.sound||!SET.music)return;
   var a=ac();if(!a)return;
   if(!MUS.g){MUS.g=a.createGain();MUS.lp=a.createBiquadFilter();MUS.lp.type="lowpass";MUS.lp.frequency.value=3000;MUS.lp.Q.value=.5;MUS.g.connect(MUS.lp);MUS.lp.connect(a.destination);}
   MUS.g.gain.cancelScheduledValues(a.currentTime);MUS.g.gain.setValueAtTime(0.0001,a.currentTime);MUS.g.gain.linearRampToValueAtTime(1,a.currentTime+1.6);
-  MUS.on=true;MUS.next=a.currentTime+.1;MUS.n=0;MUS.hook=null;
+  MUS.on=true;MUS.next=a.currentTime+.1;MUS.n=0;MUS.hook=null;MUS.heat=null;MUS.stepUp=false;
   MUS.timer=setInterval(musicTick,120);musicTick();
 }
 function musicStop(){
@@ -2142,7 +2181,7 @@ function init(){
 /* hooks for testing and for the app icon */
 var LUDO={SPEED:SPEED,forceDice:null,get G(){return G;},newGame:newGame,legalMoves:legalMoves,drawPawn:drawPawn,drawBoard:drawBoard,COLORS:COLORS,TRACK:TRACK,posOf:posOf,
   forceAnimal:null,get R3(){return R3;},captureAnim:captureAnim,fxLaugh:fxLaugh,fxFirework:fxFirework,fxFireworkYards:fxFireworkYards,fxAngryVictim:fxAngryVictim,dholDance:dholDance,roosterCancel:roosterCancel,setAngry:setAngry,startFx:startFx,HACK:HACK,
-  tapToken:function(i){if(!G)return;var m=G.moves.filter(function(m){return m.i===i;})[0];if(m)doMove(m);},roll:function(){roll();},MUS:MUS,musicMood:musicMood,musicParty:musicParty,fxStarRockets:fxStarRockets,diwali:diwali};
+  tapToken:function(i){if(!G)return;var m=G.moves.filter(function(m){return m.i===i;})[0];if(m)doMove(m);},roll:function(){roll();},MUS:MUS,musicHeat:musicHeat,musicMood:musicMood,musicParty:musicParty,fxStarRockets:fxStarRockets,diwali:diwali};
 window.LUDO=LUDO;
 init();
 })();
