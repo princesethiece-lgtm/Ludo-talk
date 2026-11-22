@@ -820,7 +820,7 @@ function onRolled(d){
   checkMood(p.color,d);
   var moves=legalMoves(p.color,d);g.moves=moves;
   if(!moves.length){
-    if(p.type==="human")toast(allInYard(p.color)?"You need a 6 to start":"No move possible");
+    if(p.type==="human"&&!allInYard(p.color))toast("No move possible");
     setTimeout(function(){if(G===g)endTurn(d===6);},T(p.type==="human"?1000:700));
     return;
   }
