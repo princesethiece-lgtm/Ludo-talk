@@ -4,3 +4,9 @@ Same game as the iPhone app (web/index.html) plus: Add-to-Home-Screen icon, offl
 Served from the NAS (folder `ludo-web`, container `an-ludo-web`, port 8860). On each start the container downloads
 these files from this repo, so to update: change files here, push, then restart the container.
 Uses ../web/three.min.js and ../web/voice-data.js.
+
+## Updating the live web version
+1. Change `web/index.html`, then run `python3 ludo-web/build.py` (makes `ludo-web/index.html`, bumps the offline cache).
+2. Commit and push; note the short commit id.
+3. On the NAS write that id into `ludo-web/ref.txt` and restart the `ludo-web` project
+   (files are fetched through jsDelivr at that exact commit; `@main` there can be hours old).
